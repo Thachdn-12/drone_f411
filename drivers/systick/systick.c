@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdio.h>
 
 #define SYST_CSR   (*(volatile uint32_t*)0xE000E010)
 #define SYST_RVR   (*(volatile uint32_t*)0xE000E014)
@@ -25,5 +26,5 @@ void SysTick_Handler(void)
 void delay_ms(uint32_t ms)
 {
     uint32_t start = tick;
-    while ((tick - start) < ms);
+    while ((tick - start) < ms){};
 }
