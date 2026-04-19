@@ -29,7 +29,7 @@ g_pfnVectors:
     .word Default_Handler /* DebugMon */
     .word 0
     .word Default_Handler /* PendSV */
-    .word Default_Handler /* SysTick */
+    .word SysTick_Handler /* SysTick */
 
     /* IRQs (rút gọn, sau này add thêm) */
     .rept 82
@@ -73,7 +73,6 @@ zero_word:
     b zero_loop
 
 /* Call main */
-main:
     bl main
 
 loop:
