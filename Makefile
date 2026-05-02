@@ -15,7 +15,8 @@ LDFLAGS = -T linker.ld -nostdlib
 INCLUDES = \
 -Icore \
 -Idrivers/gpio \
--Idrivers/systick
+-Idrivers/systick\
+-Idrivers/i2c
 
 
 SRC = \
@@ -23,6 +24,7 @@ SRC = \
     core/system.c \
     drivers/systick/systick.c \
     drivers/gpio/gpio.c \
+	drivers/i2c/i2c.c \
     app/main.c
 
 OBJ = $(SRC:.c=.o)
