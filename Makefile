@@ -16,15 +16,18 @@ INCLUDES = \
 -Icore \
 -Idrivers/gpio \
 -Idrivers/systick\
--Idrivers/i2c
+-Idrivers/i2c\
+-Idrivers/uart
 
 
 SRC = \
     startup_stm32f411.s \
     core/system.c \
+	core/systemcall.c\
     drivers/systick/systick.c \
     drivers/gpio/gpio.c \
 	drivers/i2c/i2c.c \
+	drivers/uart/uart.c \
     app/main.c
 
 OBJ = $(SRC:.c=.o)
