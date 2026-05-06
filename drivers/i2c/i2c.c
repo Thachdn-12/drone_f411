@@ -21,6 +21,42 @@
 #define I2C1_SR2        (*(volatile uint32_t*)(I2C1_BASE + 0x18))
 #define I2C1_DR         (*(volatile uint32_t*)(I2C1_BASE + 0x10))
 
+/* HELPER FUNCTION */
+static void i2c_start(void){
+    I2C1_CR1 |= (1<<8); //START
+    while (!(I2C1_SR1 & (1 << 0))); //SB
+}
+
+static void i2c_stop(void){
+    I2C1_CR1 |= (1<<9); //STOP
+}
+
+static void i2c_send_addr(uint8_t addr){
+    I2C1_DR = addr;
+
+    while (!(I2C1_SR1 & (1 << 1)));
+
+    (void)I2C1_SR1; //Clear flag
+    (void)I2C1_SR2; //Clear flag
+}
+
+static void i2c_write_data(uint8_t data){
+    while (!(I2C1_SR1 & (1 << 7)));
+    I2C1_DR = data;
+}
+
+static uint8_t i2c_read_data_ack(void){
+    I2C1_CR1 |= (1 << 10); //ACK
+    while (!(I2C1_SR1 & (1 << 6)));
+    return I2C1_DR;
+}
+
+static uint8_t i2c_read_data_nack(void){
+    I2C1_CR1 &= ~(1 << 10); //Disable ACK
+    i2c_stop();
+    while (!(I2C1_SR1 & (1 << 6)));
+    return I2C1_DR;
+}
 
 /* INIT */
 void i2c_init(void)
