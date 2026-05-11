@@ -137,6 +137,19 @@ void I2C_Stop(uint32_t i2c_base)
  * @param  data: Data byte to send
  * @retval I2C_Status_t
  */
+void I2C_SendAddress(uint32_t i2c_base, uint8_t addr){
+    /* write address to DR */
+    I2C_DR(i2c_base) = addr;
+
+    /* wait ADDR flag */
+    while(!(I2C_SR1(i2c_base)&I2C_SR1_ADDR));
+}
+/**
+ * @brief  Write one byte to I2C bus
+ * @param  i2c_base: I2C peripheral base address
+ * @param  data: Data byte to send
+ * @retval I2C_Status_t
+ */
 I2C_Status_t I2C_WriteByte(uint32_t i2c_base, uint8_t data)
 {
     volatile uint32_t timeout = I2C_TIMEOUT_VALUE;
@@ -169,14 +182,26 @@ I2C_Status_t I2C_ReadByte(uint32_t i2c_base, uint8_t *data, uint8_t ack)
     
     /* Enable/Disable Acknowledge */
     if (ack) {
+        /* ACK = 1 */
         I2C_CR1(i2c_base) |= I2C_CR1_ACK;
     } else {
+        /* ACK = 0 */
         I2C_CR1(i2c_base) &= ~I2C_CR1_ACK;
+        /* clear ADDR */
+        (void)I2C_SR1(i2c_base);
+        (void)I2C_SR2(i2c_base);
+        /* Stop */
+        I2C_CR1(i2c_base) |= I2C_CR1_STOP;
     }
     
     /* Wait for RXNE flag (Receive Data Register Not Empty) */
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_RXNE) && timeout--);
-    if (timeout == 0) return I2C_TIMEOUT;
+    while (!(I2C_SR1(i2c_base) & I2C_SR1_RXNE))
+    {
+        if (--timeout == 0)
+        {
+            return I2C_TIMEOUT;
+        }
+    }
     
     /* Read data from DR */
     *data = (uint8_t)I2C_DR(i2c_base);
