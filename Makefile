@@ -15,8 +15,8 @@ LDFLAGS = -T linker.ld -nostdlib
 INCLUDES = \
 -Icore \
 -Idrivers/gpio \
--Idrivers/systick\
--Idrivers/i2c\
+-Idrivers/systick \
+-Idrivers/i2c \
 -Idrivers/uart
 
 
@@ -58,3 +58,5 @@ debug:
 
 clean:
 	rm -f $(OBJ) *.elf *.bin
+gdb:
+	gdb-multiarch $(PROJECT).elf
