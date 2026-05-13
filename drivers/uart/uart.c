@@ -114,3 +114,23 @@ char uart_read_char(void) {
     while (!(USART1->SR & (1 << 5))); // RXNE
     return USART1->DR;
 }
+
+void uart_print_uint(uint32_t value)
+{
+    char buf[11];
+    int i = 0;
+
+    if (value == 0) {
+        uart_write_char('0');
+        return;
+    }
+
+    while (value > 0) {
+        buf[i++] = (value % 10) + '0';
+        value /= 10;
+    }
+
+    while (i--) {
+        uart_write_char(buf[i]);
+    }
+}

@@ -12,6 +12,49 @@ static uint8_t mpu6050_addr = MPU6050_ADDR_LOW;
 static MPU6050_AccelFS_t current_accel_fs = MPU6050_ACCEL_FS_2;
 static MPU6050_GyroFS_t current_gyro_fs = MPU6050_GYRO_FS_250;
 
+uint8_t MPU6050_ReadReg(uint8_t reg)
+{
+    uint8_t data;
+
+    /* ================= START ================= */
+    I2C_Start(I2C1_BASE);
+
+    /* ================= SEND ADDRESS WRITE ================= */
+    if(I2C_SendAddress(I2C1_BASE, (0x68 << 1) | 0) != I2C_OK)
+        return 0xFF;
+
+    /* ================= SEND REGISTER ================= */
+    I2C_WriteData(I2C1_BASE, reg);
+
+    while(!(I2C_SR1(I2C1_BASE) & (1 << 7))); // TXE
+
+    /* ================= RESTART ================= */
+    I2C_Start(I2C1_BASE);
+
+    /* ================= SEND ADDRESS READ ================= */
+    if(I2C_SendAddress(I2C1_BASE, (0x68 << 1) | 1) != I2C_OK)
+        return 0xFF;
+
+    /* ================= DISABLE ACK ================= */
+    I2C_CR1(I2C1_BASE) &= ~(1 << 10);
+
+    /* ================= CLEAR ADDR ================= */
+    volatile uint32_t temp;
+    temp = I2C_SR1(I2C1_BASE);
+    temp = I2C_SR2(I2C1_BASE);
+
+    /* ================= STOP ================= */
+    I2C_Stop(I2C1_BASE);
+
+    /* ================= WAIT RXNE ================= */
+    while(!(I2C_SR1(I2C1_BASE) & (1 << 6)));
+
+    /* ================= READ DATA ================= */
+    data = I2C_DR(I2C1_BASE);
+
+    return data;
+}
+
 /**
  * @brief  Get accelerometer sensitivity based on full scale range
  * @param  fs: Full scale range

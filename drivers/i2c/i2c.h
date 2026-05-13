@@ -76,7 +76,7 @@ typedef enum {
 void I2C1_Init(void);
 I2C_Status_t I2C_Start(uint32_t i2c_base);
 void I2C_Stop(uint32_t i2c_base);
-void I2C_SendAddress(uint32_t i2c, uint8_t addr);
+I2C_Status_t I2C_SendAddress(uint32_t i2c, uint8_t addr);
 I2C_Status_t I2C_WriteByte(uint32_t i2c_base, uint8_t data);
 I2C_Status_t I2C_ReadByte(uint32_t i2c_base, uint8_t *data, uint8_t ack);
 I2C_Status_t I2C_WriteRegister(uint32_t i2c_base, uint8_t dev_addr, uint8_t reg, uint8_t data);

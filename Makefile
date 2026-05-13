@@ -7,9 +7,11 @@ OBJCOPY = arm-none-eabi-objcopy
 
 CFLAGS = -mcpu=cortex-m4 -mthumb -Wall -O0 -g3
 CFLAGS += -ffreestanding -nostdlib
+#CFLAGS += -ffreestanding
 CFLAGS += -fno-inline -fno-omit-frame-pointer
 CFLAGS += $(INCLUDES)
 LDFLAGS = -T linker.ld -nostdlib
+LDFLAGS += -lc -lm
 
 # ================= INCLUDE =================
 INCLUDES = \

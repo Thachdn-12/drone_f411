@@ -75,15 +75,15 @@ void I2C1_Init(void)
     /* Configure I2C1 for 100kHz (Standard Mode) */
     /* APB1 Clock = 48MHz (assuming SystemCoreClock = 48MHz) */
     /* Set CR2: FREQ = 48 (APB1 frequency in MHz) */
-    I2C_CR2(I2C1_BASE) = 48;
+    I2C_CR2(I2C1_BASE) = 16;
     
     /* Set CCR for 100kHz */
     /* CCR = Fpclk1 / (2 * Fi2c) = 48000000 / (2 * 100000) = 240 */
-    I2C_CCR(I2C1_BASE) = 240;
+    I2C_CCR(I2C1_BASE) = 80;
     
     /* Set TRISE for 100kHz */
     /* TRISE = Fpclk1 / 1MHz + 1 = 48 + 1 = 49 */
-    I2C_TRISE(I2C1_BASE) = 49;
+    I2C_TRISE(I2C1_BASE) = 17;
     
     /* Enable I2C1 */
     I2C_CR1(I2C1_BASE) |= I2C_CR1_PE;
@@ -137,12 +137,32 @@ void I2C_Stop(uint32_t i2c_base)
  * @param  data: Data byte to send
  * @retval I2C_Status_t
  */
-void I2C_SendAddress(uint32_t i2c_base, uint8_t addr){
-    /* write address to DR */
+I2C_Status_t I2C_SendAddress(uint32_t i2c_base,
+                             uint8_t addr)
+{
+    volatile uint32_t timeout = I2C_TIMEOUT_VALUE;
+
+    /* Send address */
     I2C_DR(i2c_base) = addr;
 
-    /* wait ADDR flag */
-    while(!(I2C_SR1(i2c_base)&I2C_SR1_ADDR));
+    while (!(I2C_SR1(i2c_base) & I2C_SR1_ADDR))
+    {
+        /* ACK failure */
+        if (I2C_SR1(i2c_base) & I2C_SR1_AF)
+        {
+            /* clear AF */
+            I2C_SR1(i2c_base) &= ~I2C_SR1_AF;
+
+            return I2C_ERROR;
+        }
+
+        if (--timeout == 0)
+        {
+            return I2C_TIMEOUT;
+        }
+    }
+
+    return I2C_OK;
 }
 /**
  * @brief  Write one byte to I2C bus
@@ -184,14 +204,17 @@ I2C_Status_t I2C_ReadByte(uint32_t i2c_base, uint8_t *data, uint8_t ack)
     if (ack) {
         /* ACK = 1 */
         I2C_CR1(i2c_base) |= I2C_CR1_ACK;
-    } else {
-        /* ACK = 0 */
-        I2C_CR1(i2c_base) &= ~I2C_CR1_ACK;
         /* clear ADDR */
         (void)I2C_SR1(i2c_base);
         (void)I2C_SR2(i2c_base);
+    } else {
+        /* ACK = 0 */
+        I2C_CR1(i2c_base) &= ~I2C_CR1_ACK;
         /* Stop */
         I2C_CR1(i2c_base) |= I2C_CR1_STOP;
+        /* clear ADDR */
+        (void)I2C_SR1(i2c_base);
+        (void)I2C_SR2(i2c_base);
     }
     
     /* Wait for RXNE flag (Receive Data Register Not Empty) */
