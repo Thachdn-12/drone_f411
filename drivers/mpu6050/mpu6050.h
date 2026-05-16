@@ -130,7 +130,7 @@ typedef enum {
 } MPU6050_Status_t;
 
 /* Function Prototypes */
-MPU6050_Status_t MPU6050_Init(uint8_t i2c_addr);
+MPU6050_Status_t MPU6050_Init(uint32_t i2c_addr);
 MPU6050_Status_t MPU6050_Configure(MPU6050_Config_t *config);
 MPU6050_Status_t MPU6050_GetDeviceID(uint8_t *id);
 MPU6050_Status_t MPU6050_GetRawData(MPU6050_RawData_t *data);
@@ -141,6 +141,8 @@ MPU6050_Status_t MPU6050_SetGyroFS(MPU6050_GyroFS_t fs);
 MPU6050_Status_t MPU6050_SetClockSource(MPU6050_ClockSource_t clk);
 MPU6050_Status_t MPU6050_SetDLPF(MPU6050_DLPF_t dlpf);
 MPU6050_Status_t MPU6050_SetSampleRateDiv(uint8_t div);
+
+uint8_t MPU6050_ReadReg(uint8_t reg);
 
 /* Helper Functions */
 float MPU6050_GetAccelSensitivity(MPU6050_AccelFS_t fs);

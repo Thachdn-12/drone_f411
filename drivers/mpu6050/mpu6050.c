@@ -24,7 +24,7 @@ uint8_t MPU6050_ReadReg(uint8_t reg)
         return 0xFF;
 
     /* ================= SEND REGISTER ================= */
-    I2C_WriteData(I2C1_BASE, reg);
+    I2C_WriteByte(I2C1_BASE, reg);
 
     while(!(I2C_SR1(I2C1_BASE) & (1 << 7))); // TXE
 
@@ -39,9 +39,8 @@ uint8_t MPU6050_ReadReg(uint8_t reg)
     I2C_CR1(I2C1_BASE) &= ~(1 << 10);
 
     /* ================= CLEAR ADDR ================= */
-    volatile uint32_t temp;
-    temp = I2C_SR1(I2C1_BASE);
-    temp = I2C_SR2(I2C1_BASE);
+    I2C_SR1(I2C1_BASE);
+    I2C_SR2(I2C1_BASE);
 
     /* ================= STOP ================= */
     I2C_Stop(I2C1_BASE);
@@ -92,7 +91,7 @@ float MPU6050_GetGyroSensitivity(MPU6050_GyroFS_t fs)
  * @param  i2c_addr: I2C address (MPU6050_ADDR_LOW or MPU6050_ADDR_HIGH)
  * @retval MPU6050_Status_t
  */
-MPU6050_Status_t MPU6050_Init(uint8_t i2c_addr)
+MPU6050_Status_t MPU6050_Init(uint32_t i2c_addr)
 {
     uint8_t id;
     

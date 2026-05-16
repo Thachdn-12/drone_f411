@@ -10,8 +10,10 @@ CFLAGS += -ffreestanding -nostdlib
 #CFLAGS += -ffreestanding
 CFLAGS += -fno-inline -fno-omit-frame-pointer
 CFLAGS += $(INCLUDES)
-LDFLAGS = -T linker.ld -nostdlib
+#LDFLAGS = -T linker.ld -nostdlib
+LDFLAGS += -T linker.ld -nostartfiles
 LDFLAGS += -lc -lm
+LDFLAGS += -lgcc
 
 # ================= INCLUDE =================
 INCLUDES = \
@@ -19,6 +21,7 @@ INCLUDES = \
 -Idrivers/gpio \
 -Idrivers/systick \
 -Idrivers/i2c \
+-Idrivers/mpu6050 \
 -Idrivers/uart
 
 
@@ -30,6 +33,7 @@ SRC = \
     drivers/gpio/gpio.c \
 	drivers/i2c/i2c.c \
 	drivers/uart/uart.c \
+	drivers/mpu6050/mpu6050.c \
     app/main.c
 
 OBJ = $(SRC:.c=.o)
