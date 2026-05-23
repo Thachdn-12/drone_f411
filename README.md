@@ -55,9 +55,7 @@ Hardware
 ├── core/
 ├── kernel/
 ├── drivers/
-├── services/
 ├── app/
-└── config/
 ```
 
 ---

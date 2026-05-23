@@ -1,479 +1,332 @@
-/**
- * @file    i2c.c
- * @brief   I2C driver implementation for STM32F411 (Baremetal)
- * @author  Toby
- */
+/* =========================================================
+ * File: drivers/i2c/i2c.c
+ * STM32F411 I2C1 Driver
+ * PB8 -> SCL
+ * PB9 -> SDA
+ * ========================================================= */
 
-#include <stdint.h>
 #include "i2c.h"
 #include "gpio.h"
+#include "systick.h"
+#include "uart.h"
+/* =========================================================
+ * Base Addresses
+ * ========================================================= */
 
-/* RCC Base Address */
-#define RCC_BASE        0x40023800
+#define RCC_BASE            0x40023800UL
+#define GPIOB_BASE          0x40020400UL
+#define I2C1_BASE           0x40005400UL
 
-/* RCC Registers */
-#define RCC_AHB1ENR     (*(volatile uint32_t*)(RCC_BASE + 0x30))
-#define RCC_APB1ENR     (*(volatile uint32_t*)(RCC_BASE + 0x40))
+/* =========================================================
+ * RCC
+ * ========================================================= */
 
-/* RCC Enable Bits */
-#define RCC_APB1ENR_I2C1EN     (1 << 21)
+#define RCC_AHB1ENR         (*(volatile uint32_t*)(RCC_BASE + 0x30))
+#define RCC_APB1ENR         (*(volatile uint32_t*)(RCC_BASE + 0x40))
 
-///* GPIO Base Addresses */
-//#define GPIOB_BASE      0x40020400
-//
-///* GPIO Registers */
-//#define GPIO_MODER(n)       *((volatile uint32_t *)((n) + 0x00))
-//#define GPIO_OTYPER(n)      *((volatile uint32_t *)((n) + 0x04))
-//#define GPIO_OSPEEDR(n)     *((volatile uint32_t *)((n) + 0x08))
-//#define GPIO_PUPDR(n)       *((volatile uint32_t *)((n) + 0x0C))
-//#define GPIO_IDR(n)         *((volatile uint32_t *)((n) + 0x10))
-//#define GPIO_ODR(n)         *((volatile uint32_t *)((n) + 0x14))
-//#define GPIO_AFRL(n)        *((volatile uint32_t *)((n) + 0x20))
-//#define GPIO_AFRH(n)        *((volatile uint32_t *)((n) + 0x24))
+/* =========================================================
+ * GPIOB
+ * ========================================================= */
 
-/* Timeout definition */
-#define I2C_TIMEOUT_VALUE   100000
+#define GPIOB_MODER         (*(volatile uint32_t*)(GPIOB_BASE + 0x00))
+#define GPIOB_OTYPER        (*(volatile uint32_t*)(GPIOB_BASE + 0x04))
+#define GPIOB_OSPEEDR       (*(volatile uint32_t*)(GPIOB_BASE + 0x08))
+#define GPIOB_PUPDR         (*(volatile uint32_t*)(GPIOB_BASE + 0x0C))
+#define GPIOB_AFRH          (*(volatile uint32_t*)(GPIOB_BASE + 0x24))
 
-/**
- * @brief  Initialize I2C1 (PB6-SCL, PB7-SDA) for STM32F411 Blackpill
- * @param  None
- * @retval None
- */
-void I2C1_Init(void)
+/* =========================================================
+ * I2C1 Registers
+ * ========================================================= */
+
+#define I2C1_CR1            (*(volatile uint32_t*)(I2C1_BASE + 0x00))
+#define I2C1_CR2            (*(volatile uint32_t*)(I2C1_BASE + 0x04))
+#define I2C1_OAR1           (*(volatile uint32_t*)(I2C1_BASE + 0x08))
+#define I2C1_SR1            (*(volatile uint32_t*)(I2C1_BASE + 0x14))
+#define I2C1_SR2            (*(volatile uint32_t*)(I2C1_BASE + 0x18))
+#define I2C1_DR             (*(volatile uint32_t*)(I2C1_BASE + 0x10))
+#define I2C1_CCR            (*(volatile uint32_t*)(I2C1_BASE + 0x1C))
+#define I2C1_TRISE          (*(volatile uint32_t*)(I2C1_BASE + 0x20))
+
+/* =========================================================
+ * Bit Definitions
+ * ========================================================= */
+
+#define I2C_CR1_PE          (1 << 0)
+#define I2C_CR1_START       (1 << 8)
+#define I2C_CR1_STOP        (1 << 9)
+#define I2C_CR1_ACK         (1 << 10)
+
+#define I2C_SR1_SB          (1 << 0)
+#define I2C_SR1_ADDR        (1 << 1)
+#define I2C_SR1_BTF         (1 << 2)
+#define I2C_SR1_RXNE        (1 << 6)
+#define I2C_SR1_TXE         (1 << 7)
+
+#define I2C_SR2_BUSY        (1 << 1)
+
+/* =========================================================
+ * Local Helpers
+ * ========================================================= */
+
+static void i2c_start(void)
 {
-    /* Enable GPIOB and I2C1 clocks */
-    gpio_clock_enable(GPIOB);
-    RCC_APB1ENR |= RCC_APB1ENR_I2C1EN;
-    
-    /* Configure PB6 (SCL) and PB7 (SDA) as Alternate Function */
-    /* Set PB6 and PB7 to Alternate Function Mode (MODER = 10) */
-    //GPIO_MODER(GPIOB_BASE) &= ~(0xF << 12);    /* Clear bits 12-15 */
-    gpio_mode(GPIOB,6,GPIO_AF);     /* Set AF mode for PB6 */
-    gpio_mode(GPIOB,7,GPIO_AF);     /* Set AF mode for PB7 */
-    /* Set Output Type to Open-Drain */
-    //GPIO_OTYPER(GPIOB_BASE) |= (0x3 << 6);      /* Open-drain for PB6, PB7 */
-    gpio_output_type(GPIOB,6,GPIO_OPEN_DRAIN);  /* Open-drain for PB6 */
-    gpio_output_type(GPIOB,7,GPIO_OPEN_DRAIN);  /* Open-drain for PB7 */
-    /* Set High Speed */
-    //GPIO_OSPEEDR(GPIOB_BASE) |= (0xF << 12);    
-    gpio_speed(GPIOB,6,GPIO_HIGH_SPEED);    /* High speed for PB6 */
-    gpio_speed(GPIOB,7,GPIO_HIGH_SPEED);    /* High speed for PB7 */
-    /* Set Pull-Up */
-    //GPIO_PUPDR(GPIOB_BASE) &= ~(0xF << 12);
-    //GPIO_PUPDR(GPIOB_BASE) |= (0x5 << 12);      
-    gpio_pull(GPIOB,6,GPIO_PULL_UP);    /* Pull-up for PB6 */
-    gpio_pull(GPIOB,7,GPIO_PULL_UP);    /* Pull-up for PB7 */
-    /* Set Alternate Function 4 (I2C1) */
-    //GPIO_AFRL(GPIOB_BASE) &= ~(0xFF << 24);     /* Clear AF for PB6, PB7 */
-    //GPIO_AFRL(GPIOB_BASE) |= (0x44 << 24);      /* AF4 for PB6, PB7 */
-    gpio_af(GPIOB,6,0x4);   /* AF4 for PB6 */
-    gpio_af(GPIOB,7,0x4);   /* AF4 for PB7 */
-    /* Reset I2C1 */
-    I2C_CR1(I2C1_BASE) |= I2C_CR1_SWRST;
-    for(volatile int i=0;i<1000;i++);
-    I2C_CR1(I2C1_BASE) &= ~I2C_CR1_SWRST;
-    
-    /* Disable I2C1 before configuration */
-    I2C_CR1(I2C1_BASE) &= ~I2C_CR1_PE;
-    
-    /* Configure I2C1 for 100kHz (Standard Mode) */
-    /* APB1 Clock = 16MHz */
-    /* Set CR2: FREQ = 16 (APB1 frequency in MHz) */
-    I2C_CR2(I2C1_BASE) = 16;
-    
-    /* Set CCR for 100kHz */
-    /* CCR = Fpclk1 / (2 * Fi2c) = 16000000 / (2 * 100000) = 80 */
-    I2C_CCR(I2C1_BASE) = 80;
-    
-    /* Set TRISE for 100kHz */
-    /* TRISE = Fpclk1 / 1MHz + 1 = 16 + 1 = 17 */
-    I2C_TRISE(I2C1_BASE) = 17;
-    
-    /* Enable Acknowledge */
-    I2C_CR1(I2C1_BASE) |= I2C_CR1_ACK;
+    I2C1_CR1 |= I2C_CR1_START;
 
-    /* Enable I2C1 */
-    I2C_CR1(I2C1_BASE) |= I2C_CR1_PE;
-}
-
-/**
- * @brief  Generate I2C Start Condition
- * @param  i2c_base: I2C peripheral base address
- * @retval I2C_Status_t
- */
-I2C_Status_t I2C_Start(uint32_t i2c_base)
-{
-    volatile uint32_t timeout = I2C_TIMEOUT_VALUE;
-    
-    /* Wait until bus is not busy */
-    //while ((I2C_SR2(i2c_base) & I2C_SR2_BUSY) && timeout--);
-    //if (timeout == 0) return I2C_TIMEOUT;
-    
-    /* Generate Start Condition */
-    I2C_CR1(i2c_base) |= I2C_CR1_START;
-    
-    /* Wait for Start Bit flag */
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_SB))
+    while (!(I2C1_SR1 & I2C_SR1_SB))
     {
-        if (--timeout == 0)
-        {
-            return I2C_TIMEOUT;
-        }
     }
-
-    return I2C_OK;
 }
 
-/**
- * @brief  Generate I2C Stop Condition
- * @param  i2c_base: I2C peripheral base address
- * @retval None
- */
-void I2C_Stop(uint32_t i2c_base)
+static void i2c_stop(void)
 {
-    /* Generate Stop Condition */
-    I2C_CR1(i2c_base) |= I2C_CR1_STOP;
-    
-    /* Wait for STOP flag to be cleared */
-    volatile uint32_t timeout = I2C_TIMEOUT_VALUE;
-    while ((I2C_CR1(i2c_base) & I2C_CR1_STOP) && timeout--);
+    I2C1_CR1 |= I2C_CR1_STOP;
 }
 
-/**
- * @brief  Write one byte to I2C bus
- * @param  i2c_base: I2C peripheral base address
- * @param  data: Data byte to send
- * @retval I2C_Status_t
- */
-I2C_Status_t I2C_SendAddress(uint32_t i2c_base,
-                             uint8_t addr)
+static void i2c_send_addr(uint8_t addr)
 {
-    volatile uint32_t timeout = I2C_TIMEOUT_VALUE;
+    I2C1_DR = addr;
 
-    /* Send address */
-    I2C_DR(i2c_base) = addr;
-
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_ADDR))
+    while (!(I2C1_SR1 & I2C_SR1_ADDR))
     {
-        /* ACK failure */
-        if (I2C_SR1(i2c_base) & I2C_SR1_AF)
-        {
-            /* clear AF */
-            I2C_SR1(i2c_base) &= ~I2C_SR1_AF;
-
-            return I2C_ERROR;
-        }
-
-        if (--timeout == 0)
-        {
-            return I2C_TIMEOUT;
-        }
     }
 
-    return I2C_OK;
-}
-/**
- * @brief  Write one byte to I2C bus
- * @param  i2c_base: I2C peripheral base address
- * @param  data: Data byte to send
- * @retval I2C_Status_t
- */
-I2C_Status_t I2C_WriteByte(uint32_t i2c_base, uint8_t data)
-{
-    volatile uint32_t timeout = I2C_TIMEOUT_VALUE;
-    
-    /* Wait for TXE flag (Transmit Data Register Empty) */
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_TXE) && timeout--);
-    if (timeout == 0) return I2C_TIMEOUT;
-    
-    /* Write data to DR */
-    I2C_DR(i2c_base) = data;
-    
-    return I2C_OK;
+    /*
+     * Clear ADDR flag
+     */
+
+    (void)I2C1_SR1;
+    (void)I2C1_SR2;
 }
 
-/**
- * @brief  Read one byte from I2C bus
- * @param  i2c_base: I2C peripheral base address
- * @param  data: Pointer to store received data
- * @param  ack: Enable ACK (1) or NACK (0)
- * @retval I2C_Status_t
- */
-I2C_Status_t I2C_ReadByte(uint32_t i2c_base, uint8_t *data, uint8_t ack)
+static void i2c_write_byte(uint8_t data)
 {
-    volatile uint32_t timeout = I2C_TIMEOUT_VALUE;
-    
-    /* Enable/Disable Acknowledge */
-    if (ack) {
-        /* ACK = 1 */
-        I2C_CR1(i2c_base) |= I2C_CR1_ACK;
-        /* clear ADDR */
-        (void)I2C_SR1(i2c_base);
-        (void)I2C_SR2(i2c_base);
-    } else {
-        /* ACK = 0 */
-        I2C_CR1(i2c_base) &= ~I2C_CR1_ACK;
-        /* Stop */
-        I2C_CR1(i2c_base) |= I2C_CR1_STOP;
-        /* clear ADDR */
-        (void)I2C_SR1(i2c_base);
-        (void)I2C_SR2(i2c_base);
-    }
-    
-    /* Wait for RXNE flag (Receive Data Register Not Empty) */
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_RXNE))
+    while (!(I2C1_SR1 & I2C_SR1_TXE))
     {
-        if (--timeout == 0)
-        {
-            return I2C_TIMEOUT;
-        }
     }
-    
-    /* Read data from DR */
-    *data = (uint8_t)I2C_DR(i2c_base);
-    
-    /* Restore ACK */
-    I2C_CR1(i2c_base) |= I2C_CR1_ACK;
 
-    return I2C_OK;
-}
+    I2C1_DR = data;
 
-
-/**
- * @brief  Write data to a specific register
- * @param  i2c_base: I2C peripheral base address
- * @param  dev_addr: Device address (7-bit)
- * @param  reg: Register address
- * @param  data: Data to write
- * @retval I2C_Status_t
- */
-I2C_Status_t I2C_WriteRegister(uint32_t i2c_base, uint8_t dev_addr, uint8_t reg, uint8_t data)
-{
-    I2C_Status_t status;
-    volatile uint32_t timeout;
-    
-    /* Generate Start */
-    status = I2C_Start(i2c_base);
-    if (status != I2C_OK) return status;
-    
-    /* Send device address with write bit */
-    I2C_DR(i2c_base) = (dev_addr << 1) | 0x00;
-    
-    /* Wait for ADDR flag */
-    timeout = I2C_TIMEOUT_VALUE;
-     while (!(I2C_SR1(i2c_base) & I2C_SR1_ADDR))
+    while (!(I2C1_SR1 & I2C_SR1_BTF))
     {
-        /* NACK */
-        if (I2C_SR1(i2c_base) & I2C_SR1_AF)
-        {
-            I2C_SR1(i2c_base) &= ~I2C_SR1_AF;
-
-            I2C_Stop(i2c_base);
-
-            return I2C_NACK;
-        }
-
-        if (--timeout == 0)
-        {
-            I2C_Stop(i2c_base);
-
-            return I2C_TIMEOUT;
-        }
     }
-    /* Check for ACK failure */
-    if (I2C_SR1(i2c_base) & I2C_SR1_AF) {
-        I2C_SR1(i2c_base) &= ~I2C_SR1_AF;
-        I2C_Stop(i2c_base);
-        return I2C_NACK;
-    }
-    
-    /* Clear ADDR flag */
-    (void)I2C_SR1(i2c_base);
-    (void)I2C_SR2(i2c_base);
-    
-    /* Send register address */
-    status = I2C_WriteByte(i2c_base, reg);
-    if (status != I2C_OK) {
-        I2C_Stop(i2c_base);
-        return status;
-    }
-    
-    /* Send data */
-    status = I2C_WriteByte(i2c_base, data);
-    if (status != I2C_OK) {
-        I2C_Stop(i2c_base);
-        return status;
-    }
-
-    /* WAIT BTF */
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_BTF));
-    
-    /* Generate Stop */
-    I2C_Stop(i2c_base);
-    
-    return I2C_OK;
 }
 
-/**
- * @brief  Read data from a specific register
- * @param  i2c_base: I2C peripheral base address
- * @param  dev_addr: Device address (7-bit)
- * @param  reg: Register address
- * @param  data: Pointer to store received data
- * @retval I2C_Status_t
- */
-I2C_Status_t I2C_ReadRegister(uint32_t i2c_base, uint8_t dev_addr, uint8_t reg, uint8_t *data)
+static uint8_t i2c_read_byte_ack(void)
 {
-    I2C_Status_t status;
-    volatile uint32_t timeout;
-    
-    /* Generate Start */
-    status = I2C_Start(i2c_base);
-    if (status != I2C_OK) return status;
-    
-    /* Send device address with write bit */
-    I2C_DR(i2c_base) = (dev_addr << 1) | 0x00;
-    
-    /* Wait for ADDR flag */
-    timeout = I2C_TIMEOUT_VALUE;
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_ADDR) && timeout--);
-    if (timeout == 0) {
-        I2C_Stop(i2c_base);
-        return I2C_TIMEOUT;
+    I2C1_CR1 |= I2C_CR1_ACK;
+
+    while (!(I2C1_SR1 & I2C_SR1_RXNE))
+    {
     }
-    
-    /* Clear ADDR flag */
-    (void)I2C_SR1(i2c_base);
-    (void)I2C_SR2(i2c_base);
-    
-    /* Send register address */
-    status = I2C_WriteByte(i2c_base, reg);
-    if (status != I2C_OK) {
-        I2C_Stop(i2c_base);
-        return status;
-    }
-    
-    /* Generate Repeated Start */
-    status = I2C_Start(i2c_base);
-    if (status != I2C_OK) return status;
-    
-    /* Send device address with read bit */
-    I2C_DR(i2c_base) = (dev_addr << 1) | 0x01;
-    
-    /* Wait for ADDR flag */
-    timeout = I2C_TIMEOUT_VALUE;
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_ADDR) && timeout--);
-    if (timeout == 0) {
-        I2C_Stop(i2c_base);
-        return I2C_TIMEOUT;
-    }
-    
-    /* Disable ACK before clearing ADDR */
-    I2C_CR1(i2c_base) &= ~I2C_CR1_ACK;
-    
-    /* Generate Stop after reading */
-    I2C_CR1(i2c_base) |= I2C_CR1_STOP;
-    
-    /* Clear ADDR flag by reading SR2 */
-    (void)I2C_SR1(i2c_base);
-    (void)I2C_SR2(i2c_base);
-    /* Wait for RXNE flag */
-    timeout = I2C_TIMEOUT_VALUE;
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_RXNE) && timeout--);
-    if (timeout == 0) return I2C_TIMEOUT;
-    
-    /* Read data */
-    *data = (uint8_t)I2C_DR(i2c_base);
-    
-    /* Re-enable ACK for next transfer */
-    I2C_CR1(i2c_base) |= I2C_CR1_ACK;
-    
-    return I2C_OK;
+
+    return (uint8_t)I2C1_DR;
 }
 
-/**
- * @brief  Read multiple bytes from sequential registers
- * @param  i2c_base: I2C peripheral base address
- * @param  dev_addr: Device address (7-bit)
- * @param  reg: Starting register address
- * @param  buffer: Pointer to store received data
- * @param  length: Number of bytes to read
- * @retval I2C_Status_t
- */
-I2C_Status_t I2C_ReadMultiBytes(uint32_t i2c_base, uint8_t dev_addr, uint8_t reg, uint8_t *buffer, uint16_t length)
+static uint8_t i2c_read_byte_nack(void)
 {
-    I2C_Status_t status;
-    volatile uint32_t timeout;
-    uint16_t i;
-    
-    /* Generate Start */
-    status = I2C_Start(i2c_base);
-    if (status != I2C_OK) return status;
-    
-    /* Send device address with write bit */
-    I2C_DR(i2c_base) = (dev_addr << 1) | 0x00;
-    
-    /* Wait for ADDR flag */
-    timeout = I2C_TIMEOUT_VALUE;
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_ADDR) && timeout--);
-    if (timeout == 0) {
-        I2C_Stop(i2c_base);
-        return I2C_TIMEOUT;
+    I2C1_CR1 &= ~I2C_CR1_ACK;
+
+    while (!(I2C1_SR1 & I2C_SR1_RXNE))
+    {
     }
-    
-    /* Clear ADDR flag by reading SR2 */
-    (void)I2C_SR2(i2c_base);
-    
-    /* Send register address */
-    status = I2C_WriteByte(i2c_base, reg);
-    if (status != I2C_OK) {
-        I2C_Stop(i2c_base);
-        return status;
-    }
-    
-    /* Generate Repeated Start */
-    status = I2C_Start(i2c_base);
-    if (status != I2C_OK) return status;
-    
-    /* Send device address with read bit */
-    I2C_DR(i2c_base) = (dev_addr << 1) | 0x01;
-    
-    /* Wait for ADDR flag */
-    timeout = I2C_TIMEOUT_VALUE;
-    while (!(I2C_SR1(i2c_base) & I2C_SR1_ADDR) && timeout--);
-    if (timeout == 0) {
-        I2C_Stop(i2c_base);
-        return I2C_TIMEOUT;
-    }
-    
-    /* Clear ADDR flag by reading SR2 */
-    (void)I2C_SR2(i2c_base);
+
+    return (uint8_t)I2C1_DR;
+}
+
+/* =========================================================
+ * Init
+ * ========================================================= */
+
+void i2c_init(void)
+{
+    /*
+     * Enable clocks
+     */
+
+    RCC_AHB1ENR |= (1 << 1);   /* GPIOB */
+    RCC_APB1ENR |= (1 << 21);  /* I2C1 */
+
+    /* =====================================================
+     * PB8 -> I2C1_SCL
+     * PB9 -> I2C1_SDA
+     * AF4
+     * ===================================================== */
+
+    /* Alternate function */
+    gpio_mode(GPIOB, 8, GPIO_AF);
+    gpio_mode(GPIOB, 9, GPIO_AF);
+
+    /* Open drain */
+    gpio_output_type(GPIOB, 8, GPIO_OPEN_DRAIN);
+    gpio_output_type(GPIOB, 9, GPIO_OPEN_DRAIN);
+
+    /* High speed */
+    gpio_speed(GPIOB, 8, GPIO_HIGH_SPEED);
+    gpio_speed(GPIOB, 9, GPIO_HIGH_SPEED);
+
+    /* Pull-up */
+    gpio_pull(GPIOB, 8, GPIO_PULL_UP);
+    gpio_pull(GPIOB, 9, GPIO_PULL_UP);
+
+    /* AF4 */
+    gpio_af(GPIOB, 8, 0x4);
+    gpio_af(GPIOB, 9, 0x4);
+
+    /* =====================================================
+     * Reset I2C
+     * ===================================================== */
+
+    I2C1_CR1 = 0;
+
+    /*
+     * APB1 clock = 50MHz
+     */
+
+    I2C1_CR2 = 50;
+
+    /*
+     * Standard mode 100kHz
+     */
+
+    I2C1_CCR = 250;
+
+    /*
+     * Maximum rise time
+     */
+
+    I2C1_TRISE = 51;
 
     /* Enable ACK */
-    I2C_CR1(i2c_base) |= I2C_CR1_ACK;
-    
-    /* Read data bytes */
-    for (i = 0; i < length; i++) {
-        /* For last byte, send NACK */
-        if (i == (length - 1)) {
-            I2C_CR1(i2c_base) &= ~I2C_CR1_ACK;
-            I2C_CR1(i2c_base) |= I2C_CR1_STOP;
-        }
-        
-        /* Wait for RXNE flag */
-        timeout = I2C_TIMEOUT_VALUE;
-        while (!(I2C_SR1(i2c_base) & I2C_SR1_RXNE) && timeout--);
-        if (timeout == 0) {
-            I2C_Stop(i2c_base);
-            return I2C_TIMEOUT;
-        }
-        
-        /* Read data */
-        buffer[i] = (uint8_t)I2C_DR(i2c_base);
+    I2C1_CR1 |= I2C_CR1_ACK;
+
+    /* Enable peripheral */
+    I2C1_CR1 |= I2C_CR1_PE;
+}
+
+/* =========================================================
+ * Write Register
+ * ========================================================= */
+
+int i2c_write_reg(uint8_t dev_addr,
+                  uint8_t reg,
+                  uint8_t data)
+{
+    while (I2C1_SR2 & I2C_SR2_BUSY)
+    {
     }
-    
-    /* Re-enable ACK for next transfer */
-    I2C_CR1(i2c_base) |= I2C_CR1_ACK;
-    
-    return I2C_OK;
+
+    i2c_start();
+
+    /*
+     * Write mode
+     */
+
+    i2c_send_addr((dev_addr << 1) | 0);
+
+    i2c_write_byte(reg);
+
+    i2c_write_byte(data);
+
+    i2c_stop();
+
+    return 0;
+}
+
+/* =========================================================
+ * Read Register
+ * ========================================================= */
+
+int i2c_read_reg(uint8_t dev_addr,
+                 uint8_t reg,
+                 uint8_t *data)
+{
+    if (data == 0)
+    {
+        return -1;
+    }
+
+    while (I2C1_SR2 & I2C_SR2_BUSY)
+    {
+    }
+
+    /*
+     * Write register address
+     */
+
+    i2c_start();
+
+    i2c_send_addr((dev_addr << 1) | 0);
+
+    i2c_write_byte(reg);
+
+    /*
+     * Repeated start
+     */
+
+    i2c_start();
+
+    /*
+     * Read mode
+     */
+
+    i2c_send_addr((dev_addr << 1) | 1);
+
+    *data = i2c_read_byte_nack();
+
+    i2c_stop();
+
+    return 0;
+}
+
+/* =========================================================
+ * Read Multiple Bytes
+ * ========================================================= */
+
+int i2c_read_bytes(uint8_t dev_addr,
+                   uint8_t reg,
+                   uint8_t *buf,
+                   uint32_t len)
+{
+    if ((buf == 0) || (len == 0))
+    {
+        return -1;
+    }
+
+    while (I2C1_SR2 & I2C_SR2_BUSY)
+    {
+    }
+
+    /*
+     * Send register address
+     */
+
+    i2c_start();
+
+    i2c_send_addr((dev_addr << 1) | 0);
+
+    i2c_write_byte(reg);
+
+    /*
+     * Repeated start
+     */
+
+    i2c_start();
+
+    i2c_send_addr((dev_addr << 1) | 1);
+
+    for (uint32_t i = 0; i < len; i++)
+    {
+        if (i == (len - 1))
+        {
+            buf[i] = i2c_read_byte_nack();
+        }
+        else
+        {
+            buf[i] = i2c_read_byte_ack();
+        }
+    }
+
+    i2c_stop();
+
+    return 0;
 }

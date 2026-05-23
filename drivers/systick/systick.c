@@ -1,30 +1,104 @@
-#include <stdint.h>
-#include <stdio.h>
+#include "systick.h"
 
-#define SYST_CSR   (*(volatile uint32_t*)0xE000E010)
-#define SYST_RVR   (*(volatile uint32_t*)0xE000E014)
-#define SYST_CVR   (*(volatile uint32_t*)0xE000E018)
+/* =========================================================
+ * Cortex-M SysTick Registers
+ * ========================================================= */
 
-volatile uint32_t tick = 0;
+#define SYSTICK_BASE       0xE000E010UL
 
-void systick_init(void)
-{
-    /* 16MHz / 1000 = 16000 → 1ms */
-    SYST_RVR = 16000 - 1;
+#define SYST_CSR           (*(volatile uint32_t*)(SYSTICK_BASE + 0x00))
+#define SYST_RVR           (*(volatile uint32_t*)(SYSTICK_BASE + 0x04))
+#define SYST_CVR           (*(volatile uint32_t*)(SYSTICK_BASE + 0x08))
 
-    SYST_CVR = 0;
+/* =========================================================
+ * SysTick CSR Bits
+ * ========================================================= */
 
-    /* enable + interrupt + processor clock */
-    SYST_CSR = (1 << 0) | (1 << 1) | (1 << 2);
-}
+#define SYSTICK_ENABLE     (1 << 0)
+#define SYSTICK_TICKINT    (1 << 1)
+#define SYSTICK_CLKSOURCE  (1 << 2)
+
+/* =========================================================
+ * Globals
+ * ========================================================= */
+
+static volatile uint32_t g_systick_ms = 0;
+
+/* =========================================================
+ * SysTick Interrupt Handler
+ * ========================================================= */
 
 void SysTick_Handler(void)
 {
-    tick++;
+    g_systick_ms++;
 }
+
+/* =========================================================
+ * Initialize SysTick
+ * ========================================================= */
+
+void systick_init(uint32_t core_clock_hz)
+{
+    /*
+     * Generate interrupt every 1ms
+     *
+     * reload = (F_CPU / 1000) - 1
+     */
+
+    uint32_t reload;
+
+    reload = (core_clock_hz / 1000UL) - 1;
+
+    /* SysTick is 24-bit */
+    if (reload > 0xFFFFFF)
+    {
+        while (1)
+        {
+        }
+    }
+
+    /* Disable SysTick */
+    SYST_CSR = 0;
+
+    /* Set reload value */
+    SYST_RVR = reload;
+
+    /* Clear current value */
+    SYST_CVR = 0;
+
+    /*
+     * Enable:
+     * - counter
+     * - interrupt
+     * - processor clock
+     */
+
+    SYST_CSR =
+        SYSTICK_ENABLE |
+        SYSTICK_TICKINT |
+        SYSTICK_CLKSOURCE;
+}
+
+/* =========================================================
+ * Get Tick
+ * ========================================================= */
+
+uint32_t systick_get_tick(void)
+{
+    return g_systick_ms;
+}
+
+/* =========================================================
+ * Blocking Delay
+ * ========================================================= */
 
 void delay_ms(uint32_t ms)
 {
-    uint32_t start = tick;
-    while ((tick - start) < ms){};
+    uint32_t start;
+
+    start = systick_get_tick();
+
+    while ((systick_get_tick() - start) < ms)
+    {
+    }
 }

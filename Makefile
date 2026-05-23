@@ -1,68 +1,191 @@
-# ================= CONFIG =================
-PROJECT = drone
+# =========================================================
+# Project
+# =========================================================
 
-CC = arm-none-eabi-gcc
-LD = arm-none-eabi-gcc
-OBJCOPY = arm-none-eabi-objcopy
+PROJECT := drone
 
-CFLAGS = -mcpu=cortex-m4 -mthumb -Wall -O0 -g3
-CFLAGS += -ffreestanding -nostdlib
-#CFLAGS += -ffreestanding
-CFLAGS += -fno-inline -fno-omit-frame-pointer
+# =========================================================
+# Build Output
+# =========================================================
+
+BUILD_DIR := output
+
+ELF := $(BUILD_DIR)/$(PROJECT).elf
+BIN := $(BUILD_DIR)/$(PROJECT).bin
+MAP := $(BUILD_DIR)/$(PROJECT).map
+
+# =========================================================
+# Toolchain
+# =========================================================
+
+PREFIX := arm-none-eabi-
+
+CC      := $(PREFIX)gcc
+LD      := $(PREFIX)gcc
+OBJCOPY := $(PREFIX)objcopy
+SIZE    := $(PREFIX)size
+GDB     := $(PREFIX)gdb
+
+# =========================================================
+# CPU / MCU
+# STM32F411 = Cortex-M4F
+# =========================================================
+
+CPUFLAGS := \
+	-mcpu=cortex-m4 \
+	-mthumb \
+	-mfpu=fpv4-sp-d16 \
+	-mfloat-abi=hard
+
+# =========================================================
+# Compiler Flags
+# =========================================================
+
+CFLAGS := $(CPUFLAGS)
+
+CFLAGS += \
+	-std=c11 \
+	-Wall \
+	-Wextra \
+	-Wshadow \
+	-Wundef \
+	-O0 \
+	-g3 \
+	-ffreestanding \
+	-fdata-sections \
+	-ffunction-sections \
+	-fno-inline \
+	-fno-omit-frame-pointer
+
+# =========================================================
+# Includes
+# =========================================================
+
+INCLUDES := \
+	-Icore \
+	-Iapp \
+	-Idrivers/gpio \
+	-Idrivers/systick \
+	-Idrivers/i2c \
+	-Idrivers/uart \
+	-Idrivers/mpu6050 \
+	-Idrivers/pwm \
+	-Idrivers/adc \
+	-Idrivers/timer
+
 CFLAGS += $(INCLUDES)
-#LDFLAGS = -T linker.ld -nostdlib
-LDFLAGS += -T linker.ld -nostartfiles
-LDFLAGS += -lc -lm
-LDFLAGS += -lgcc
 
-# ================= INCLUDE =================
-INCLUDES = \
--Icore \
--Idrivers/gpio \
--Idrivers/systick \
--Idrivers/i2c \
--Idrivers/mpu6050 \
--Idrivers/uart
+# =========================================================
+# Linker
+# =========================================================
 
+LDSCRIPT := core/linker_stm32f411.ld
 
-SRC = \
-    startup_stm32f411.s \
-    core/system.c \
-	core/systemcall.c\
-    drivers/systick/systick.c \
-    drivers/gpio/gpio.c \
+LDFLAGS := $(CPUFLAGS)
+
+LDFLAGS += \
+	-T$(LDSCRIPT) \
+	-nostdlib \
+	-Wl,--gc-sections \
+	-Wl,-Map=$(MAP) \
+	-lgcc
+
+# =========================================================
+# Sources
+# =========================================================
+
+SRC := \
+	core/startup_stm32f411.s \
+	core/system.c \
+	drivers/systick/systick.c \
+	drivers/gpio/gpio.c \
 	drivers/i2c/i2c.c \
 	drivers/uart/uart.c \
+	drivers/pwm/pwm.c \
+	drivers/adc/adc.c \
+	drivers/timer/timer.c \
 	drivers/mpu6050/mpu6050.c \
-    app/main.c
+	app/drone_app.c \
+	app/main.c
 
-OBJ = $(SRC:.c=.o)
+# =========================================================
+# Objects
+# =========================================================
+
+OBJ := $(SRC:.c=.o)
 OBJ := $(OBJ:.s=.o)
 
-all: $(PROJECT).bin
+# =========================================================
+# Default Target
+# =========================================================
+
+all: $(BIN)
+
+# =========================================================
+# Compile C
+# =========================================================
 
 %.o: %.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+# =========================================================
+# Compile ASM
+# =========================================================
 
 %.o: %.s
-	$(CC) $(CFLAGS) -c $< -o $@
+	@mkdir -p $(dir $@)
+	$(CC) $(CPUFLAGS) -c $< -o $@
 
-$(PROJECT).elf: $(OBJ)
+# =========================================================
+# Link ELF
+# =========================================================
+
+$(ELF): $(OBJ)
+	@mkdir -p $(BUILD_DIR)
 	$(LD) $(OBJ) $(LDFLAGS) -o $@
+	$(SIZE) $@
 
-$(PROJECT).bin: $(PROJECT).elf
+# =========================================================
+# Generate BIN
+# =========================================================
+
+$(BIN): $(ELF)
 	$(OBJCOPY) -O binary $< $@
 
-FLASH_ADDR = 0x08000000
+# =========================================================
+# Flash
+# =========================================================
 
-flash: $(PROJECT).elf
-	openocd -f scripts/openocd.cfg \
-	-c "program $(PROJECT).elf verify reset exit"
+flash: $(ELF)
+	openocd \
+	-f scripts/openocd.cfg \
+	-c "program $(ELF) verify reset exit"
+
+# =========================================================
+# OpenOCD Server
+# =========================================================
 
 debug:
 	openocd -f scripts/openocd.cfg
 
-clean:
-	rm -f $(OBJ) *.elf *.bin
+# =========================================================
+# GDB
+# =========================================================
+
 gdb:
-	gdb-multiarch $(PROJECT).elf
+	$(GDB) $(ELF)
+
+# =========================================================
+# Clean
+# =========================================================
+
+clean:
+	rm -rf $(BUILD_DIR)
+	rm -f $(OBJ) *.elf *.bin *.map
+
+# =========================================================
+# Phony
+# =========================================================
+
+.PHONY: all flash debug gdb clean

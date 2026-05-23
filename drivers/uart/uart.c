@@ -1,136 +1,275 @@
 #include "uart.h"
+#include "gpio.h"
+#include "systick.h"
+#include <stdarg.h>
 
-#define PERIPH_BASE     0x40000000
-#define AHB1_OFFSET     0x00020000
-#define APB2_OFFSET     0x00010000
+/* =========================================================
+ * Base Addresses
+ * ========================================================= */
 
-#define AHB1_BASE       (PERIPH_BASE + AHB1_OFFSET)
-#define APB2_BASE       (PERIPH_BASE + APB2_OFFSET)
+#define RCC_BASE            0x40023800UL
+#define GPIOA_BASE          0x40020000UL
+#define USART2_BASE         0x40004400UL
 
-#define GPIOA_BASE      (AHB1_BASE + 0x0000)
-#define USART1_BASE     (APB2_BASE + 0x1000)
-#define RCC_BASE        (AHB1_BASE + 0x3800)
+/* =========================================================
+ * RCC
+ * ========================================================= */
 
-typedef struct {
-    volatile uint32_t MODER;
-    volatile uint32_t OTYPER;
-    volatile uint32_t OSPEEDR;
-    volatile uint32_t PUPDR;
-    volatile uint32_t IDR;
-    volatile uint32_t ODR;
-    volatile uint32_t BSRR;
-    volatile uint32_t LCKR;
-    volatile uint32_t AFR[2];
-} GPIO_TypeDef;
+#define RCC_AHB1ENR         (*(volatile uint32_t*)(RCC_BASE + 0x30))
+#define RCC_APB1ENR         (*(volatile uint32_t*)(RCC_BASE + 0x40))
 
-typedef struct {
-    volatile uint32_t CR;
-    volatile uint32_t PLLCFGR;
-    volatile uint32_t CFGR;
-    volatile uint32_t CIR;
-    volatile uint32_t AHB1RSTR;
-    volatile uint32_t AHB2RSTR;
-    volatile uint32_t RESERVED0[2];
-    volatile uint32_t APB1RSTR;
-    volatile uint32_t APB2RSTR;
-    volatile uint32_t RESERVED1[2];
-    volatile uint32_t AHB1ENR;
-    volatile uint32_t AHB2ENR;
-    volatile uint32_t RESERVED2[2];
-    volatile uint32_t APB1ENR;
-    volatile uint32_t APB2ENR;
-} RCC_TypeDef;
+/* =========================================================
+ * USART2 Registers
+ * ========================================================= */
 
-typedef struct {
-    volatile uint32_t SR;
-    volatile uint32_t DR;
-    volatile uint32_t BRR;
-    volatile uint32_t CR1;
-    volatile uint32_t CR2;
-    volatile uint32_t CR3;
-} USART_TypeDef;
+#define USART2_SR           (*(volatile uint32_t*)(USART2_BASE + 0x00))
+#define USART2_DR           (*(volatile uint32_t*)(USART2_BASE + 0x04))
+#define USART2_BRR          (*(volatile uint32_t*)(USART2_BASE + 0x08))
+#define USART2_CR1          (*(volatile uint32_t*)(USART2_BASE + 0x0C))
 
-#define GPIOA ((GPIO_TypeDef*) GPIOA_BASE)
-#define RCC   ((RCC_TypeDef*) RCC_BASE)
-#define USART1 ((USART_TypeDef*) USART1_BASE)
+/* =========================================================
+ * Bit Definitions
+ * ========================================================= */
 
-void uart_init(uint32_t baudrate) {
-    // enable clock GPIOA + USART1
-    RCC->AHB1ENR |= (1 << 0);
-    RCC->APB2ENR |= (1 << 4);
+#define USART_SR_RXNE       (1 << 5)
+#define USART_SR_TXE        (1 << 7)
 
-    // PA9 (TX), PA10 (RX) -> AF mode
-    GPIOA->MODER &= ~((3 << 18) | (3 << 20));
-    GPIOA->MODER |=  ((2 << 18) | (2 << 20));
+#define USART_CR1_UE        (1 << 13)
+#define USART_CR1_TE        (1 << 3)
+#define USART_CR1_RE        (1 << 2)
 
-    // AF7 (USART1)
-    GPIOA->AFR[1] &= ~((0xF << 4) | (0xF << 8));
-    GPIOA->AFR[1] |=  ((7 << 4) | (7 << 8));
+/* =========================================================
+ * Local Helpers
+ * ========================================================= */
 
-    // baudrate (assuming 16MHz clock)
-    uint32_t uartdiv = 16000000 / baudrate;
-    USART1->BRR = uartdiv;
-
-    // enable TX, RX, USART
-    USART1->CR1 |= (1 << 3) | (1 << 2) | (1 << 13);
-}
-
-void uart_write_char(char c) {
-    while (!(USART1->SR & (1 << 7))); // TXE
-    USART1->DR = c;
-}
-
-void uart_write_string(const char *s) {
-    while (*s) {
-        uart_write_char(*s++);
-    }
-}
-
-void uart_write_int(int value) {
-    char buf[12];
+static void uart_print_uint(uint32_t value)
+{
+    char buf[16];
     int i = 0;
 
-    if (value == 0) {
+    if (value == 0)
+    {
         uart_write_char('0');
         return;
     }
 
-    if (value < 0) {
+    while (value > 0)
+    {
+        buf[i++] = '0' + (value % 10);
+        value /= 10;
+    }
+
+    while (i--)
+    {
+        uart_write_char(buf[i]);
+    }
+}
+
+static void uart_print_int(int32_t value)
+{
+    if (value < 0)
+    {
         uart_write_char('-');
         value = -value;
     }
 
-    while (value > 0) {
-        buf[i++] = (value % 10) + '0';
-        value /= 10;
-    }
-
-    while (i--) {
-        uart_write_char(buf[i]);
-    }
+    uart_print_uint((uint32_t)value);
 }
 
-char uart_read_char(void) {
-    while (!(USART1->SR & (1 << 5))); // RXNE
-    return USART1->DR;
-}
-
-void uart_print_uint(uint32_t value)
+static void uart_print_hex(uint32_t value)
 {
-    char buf[11];
-    int i = 0;
+    char hex[] = "0123456789ABCDEF";
 
-    if (value == 0) {
-        uart_write_char('0');
-        return;
+    uart_write_string("0x");
+
+    for (int i = 28; i >= 0; i -= 4)
+    {
+        uart_write_char(
+            hex[(value >> i) & 0xF]
+        );
+    }
+}
+
+/* =========================================================
+ * UART Init
+ * ========================================================= */
+
+void uart_init(void)
+{
+    /*
+     * Enable clocks
+     */
+
+    RCC_AHB1ENR |= (1 << 0);   /* GPIOA */
+    RCC_APB1ENR |= (1 << 17);  /* USART2 */
+
+    /* =====================================================
+     * PA2 -> USART2_TX
+     * PA3 -> USART2_RX
+     * AF7
+     * ===================================================== */
+
+    /* Alternate function mode */
+    gpio_mode(GPIOA, 2, GPIO_AF);
+    gpio_mode(GPIOA, 3, GPIO_AF);
+
+    /* High speed */
+    gpio_speed(GPIOA, 2, GPIO_HIGH_SPEED);
+    gpio_speed(GPIOA, 3, GPIO_HIGH_SPEED);
+
+    /* AF7 */
+    gpio_af(GPIOA, 2, 0x7);
+    gpio_af(GPIOA, 3, 0x7);
+
+    /* =====================================================
+     * USART Configuration
+     * APB1 = 50MHz
+     * Baudrate = 115200
+     * ===================================================== */
+
+    /*
+     * 50MHz / 115200
+     *
+     * USARTDIV ≈ 434
+     */
+
+    USART2_BRR = 434;
+
+    /* Enable TX + RX */
+    USART2_CR1 |= USART_CR1_TE;
+    USART2_CR1 |= USART_CR1_RE;
+
+    /* Enable USART */
+    USART2_CR1 |= USART_CR1_UE;
+}
+
+/* =========================================================
+ * Write Character
+ * ========================================================= */
+
+void uart_write_char(char c)
+{
+    while (!(USART2_SR & USART_SR_TXE))
+    {
     }
 
-    while (value > 0) {
-        buf[i++] = (value % 10) + '0';
-        value /= 10;
+    USART2_DR = c;
+}
+
+/* =========================================================
+ * Write String
+ * ========================================================= */
+
+void uart_write_string(const char *str)
+{
+    while (*str)
+    {
+        uart_write_char(*str++);
+    }
+}
+
+/* =========================================================
+ * Read Character
+ * ========================================================= */
+
+char uart_read_char(void)
+{
+    while (!(USART2_SR & USART_SR_RXNE))
+    {
     }
 
-    while (i--) {
-        uart_write_char(buf[i]);
+    return (char)USART2_DR;
+}
+
+/* =========================================================
+ * Minimal printf
+ * Supported:
+ * %c
+ * %s
+ * %d
+ * %u
+ * %x
+ * ========================================================= */
+
+void uart_printf(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+
+    while (*fmt)
+    {
+        if (*fmt == '%')
+        {
+            fmt++;
+
+            switch (*fmt)
+            {
+                case 'c':
+                {
+                    char c =
+                        (char)va_arg(args, int);
+
+                    uart_write_char(c);
+                    break;
+                }
+
+                case 's':
+                {
+                    char *str =
+                        va_arg(args, char *);
+
+                    uart_write_string(str);
+                    break;
+                }
+
+                case 'd':
+                {
+                    int value =
+                        va_arg(args, int);
+
+                    uart_print_int(value);
+                    break;
+                }
+
+                case 'u':
+                {
+                    uint32_t value =
+                        va_arg(args, uint32_t);
+
+                    uart_print_uint(value);
+                    break;
+                }
+
+                case 'x':
+                {
+                    uint32_t value =
+                        va_arg(args, uint32_t);
+
+                    uart_print_hex(value);
+                    break;
+                }
+
+                case '%':
+                {
+                    uart_write_char('%');
+                    break;
+                }
+
+                default:
+                {
+                    uart_write_char('?');
+                    break;
+                }
+            }
+        }
+        else
+        {
+            uart_write_char(*fmt);
+        }
+
+        fmt++;
     }
+
+    va_end(args);
 }

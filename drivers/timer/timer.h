@@ -1,5 +1,5 @@
-#ifndef SYSTICK_H
-#define SYSTICK_H
+#ifndef TIMER_H
+#define TIMER_H
 
 #include <stdint.h>
 
@@ -7,10 +7,8 @@
  * APIs
  * ========================================================= */
 
-void systick_init(uint32_t core_clock_hz);
+void timer_init(uint32_t freq_hz);
 
-uint32_t systick_get_tick(void);
-
-void delay_ms(uint32_t ms);
+uint32_t timer_get_tick(void);
 
 #endif

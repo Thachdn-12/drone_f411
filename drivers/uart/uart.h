@@ -1,14 +1,26 @@
+/* =========================================================
+ * STM32F411 USART2 Driver
+ * PA2 -> TX
+ * PA3 -> RX
+ * ========================================================= */
+
 #ifndef UART_H
 #define UART_H
 
 #include <stdint.h>
 
-void uart_init(uint32_t baudrate);
+/* =========================================================
+ * APIs
+ * ========================================================= */
+
+void uart_init(void);
 
 void uart_write_char(char c);
-void uart_write_string(const char *s);
-void uart_write_int(int value);
+
+void uart_write_string(const char *str);
 
 char uart_read_char(void);
-void uart_print_uint(uint32_t value);
+
+void uart_printf(const char *fmt, ...);
+
 #endif
