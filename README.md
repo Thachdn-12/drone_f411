@@ -1,6 +1,4 @@
-from pathlib import Path
-
-readme_content = """# Drone Firmware Project
+# Drone Firmware Project
 
 ## Overview
 Custom quadcopter flight controller firmware using:
@@ -46,6 +44,35 @@ Service Layer
 Driver Layer
     ↓
 Hardware
+```
 
+---
 
+## Project Structure
 
+```text
+/drone_fw
+├── core/
+├── kernel/
+├── drivers/
+├── services/
+├── app/
+└── config/
+```
+
+---
+
+## Development Goals
+
+- Learn realtime embedded systems
+- Build event-driven firmware
+- Develop flight control logic
+- Improve firmware architecture skills
+
+---
+
+## Status
+
+- Hardware selected
+- Architecture planning completed
+- Kernel development started
