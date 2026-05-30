@@ -72,6 +72,7 @@ zero_word:
     str r2, [r0], #4
     b zero_loop
 
+    bl system_init
 /* Call main */
     bl main
 

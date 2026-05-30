@@ -2,7 +2,7 @@
 
 #include "mpu6050.h"
 #include "systick.h"
-
+#include "arm_math.h"
 
 /* =========================================================
  * Configuration
@@ -23,6 +23,7 @@ static imu_state_t g_imu;
 
 static uint32_t g_last_update_ms;
 
+static uint32_t test_global = 0;
 /* =========================================================
  * Internal Helpers
  * ========================================================= */
@@ -57,16 +58,13 @@ void task_imu_init(void)
 void task_imu_run(void)
 {
     mpu6050_raw_t raw;
-
     uint32_t now = systick_get_tick();
-
     if ((now - g_last_update_ms) < IMU_UPDATE_PERIOD_MS)
     {
         return;
     }
 
     g_last_update_ms = now;
-
     if (mpu6050_read_raw(&raw) != 0)
     {
         return;
@@ -75,23 +73,22 @@ void task_imu_run(void)
     /* -------------------------------------
      * Accelerometer (g)
      * ------------------------------------- */
-
     g_imu.ax = (float)raw.ax / ACCEL_SCALE;
     g_imu.ay = (float)raw.ay / ACCEL_SCALE;
     g_imu.az = (float)raw.az / ACCEL_SCALE;
 
+
+
     /* -------------------------------------
      * Gyroscope (deg/s)
      * ------------------------------------- */
-
-    g_imu.gx = (float)raw.gx / GYRO_SCALE;
-    g_imu.gy = (float)raw.gy / GYRO_SCALE;
-    g_imu.gz = (float)raw.gz / GYRO_SCALE;
+    g_imu.gx = raw.gx / GYRO_SCALE;
+    g_imu.gy = raw.gy / GYRO_SCALE;
+    g_imu.gz = raw.gz / GYRO_SCALE;
 
     /* -------------------------------------
      * Attitude
      * ------------------------------------- */
-
     imu_compute_attitude();
 }
 
@@ -101,20 +98,16 @@ void task_imu_run(void)
 
 static void imu_compute_attitude(void)
 {
-    g_imu.roll =
-        atan2f(
-            g_imu.ay,
-            g_imu.az
-        ) * RAD_TO_DEG;
 
-    g_imu.pitch =
-        atan2f(
-            -g_imu.ax,
-            sqrtf(
-                (g_imu.ay * g_imu.ay) +
-                (g_imu.az * g_imu.az)
-            )
-        ) * RAD_TO_DEG;
+    float32_t roll_rad;
+    float32_t pitch_rad;
+    float32_t yz_norm;
+
+    arm_atan2_f32(g_imu.ay, g_imu.az, &roll_rad);
+    arm_sqrt_f32((g_imu.ay * g_imu.ay) + (g_imu.az * g_imu.az), &yz_norm);
+    arm_atan2_f32(-g_imu.ax, yz_norm, &pitch_rad);
+    g_imu.roll  = roll_rad  * RAD_TO_DEG;
+    g_imu.pitch = pitch_rad * RAD_TO_DEG;
 }
 
 /* =========================================================

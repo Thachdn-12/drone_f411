@@ -1,5 +1,6 @@
 #include "systick.h"
 #include "uart.h"
+#include "system.h"
 #include "gpio.h"
 #include "i2c.h"
 #include "pwm.h"
@@ -33,26 +34,24 @@ int main(void)
     i2c_init();
     pwm_init();
     adc_init();
+    system_init();
     mpu6050_init();
     task_imu_init();
     /* =====================================================
      * Boot Log
      * ===================================================== */
 
-    uart_printf("\r\n");
-    uart_printf("================================\r\n");
-    uart_printf(" STM32F411 DRONE FIRMWARE\r\n");
-    uart_printf("================================\r\n");
-
-    uart_printf("[OK] SYSTEM INIT\r\n");
-    uart_printf("[OK] SYSTICK INIT\r\n");
-    uart_printf("[OK] UART INIT\r\n");
-    uart_printf("[OK] GPIO INIT\r\n");
-    uart_printf("[OK] I2C INIT\r\n");
-    uart_printf("[OK] PWM INIT\r\n");
-    uart_printf("[OK] ADC INIT\r\n");
-    uart_printf("[OK] MPU6050 INIT\r\n");
-    uart_printf("[OK] IMU TASK INIT\r\n");
+    uart_printf("====================================\r\n");
+    uart_printf(" _____ ___  ____  __   __\r\n");
+    uart_printf("████████╗ ██████╗ ██████╗ ██╗   ██╗\r\n");
+    uart_printf("╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝\r\n");
+    uart_printf("   ██║   ██║   ██║██████╔╝ ╚████╔╝ \r\n");
+    uart_printf("   ██║   ██║   ██║██╔══██╗  ╚██╔╝  \r\n");
+    uart_printf("   ██║   ╚██████╔╝██████╔╝   ██║    \r\n");
+    uart_printf("   ╚═╝    ╚═════╝ ╚═════╝    ╚═╝    \r\n");
+    uart_printf("====================================\r\n");
+    uart_printf("#  Build : %s %s                     #\r\n",__DATE__, __TIME__);
+    uart_printf("====================================\r\n");
     /* =====================================================
      * Start Application
      * ===================================================== */

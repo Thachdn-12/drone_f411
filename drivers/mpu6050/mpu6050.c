@@ -46,16 +46,12 @@ int mpu6050_init(void)
         uart_printf("MPU: WHO_AM_I read failed\r\n");
         return -1;
     }
-    
-    uart_printf("MPU WHO_AM_I = %u\r\n", id);
 
     if ((id != 0x68) && (id != 0x70))
     {
         uart_printf("MPU: invalid device\r\n");
         return -1;
     }
-
-    uart_printf("MPU6050 init OK\r\n");
 
     return 0;
 }

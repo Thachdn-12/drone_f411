@@ -71,7 +71,12 @@ INCLUDES := \
 	-Idrivers/mpu6050 \
 	-Idrivers/pwm \
 	-Idrivers/adc \
-	-Idrivers/timer
+	-Idrivers/timer \
+	-Ilibs/CMSIS/Core/Include \
+	-Ilibs/CMSIS/DSP/Include/dsp \
+	-Ilibs/CMSIS/DSP/PrivateInclude \
+	-Ilibs/CMSIS/DSP/Include
+
 
 CFLAGS += $(INCLUDES)
 
@@ -113,6 +118,8 @@ SRC := \
 	drivers/timer/timer.c \
 	drivers/mpu6050/mpu6050.c \
 	app/task_imu.c \
+	libs/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
+	libs/CMSIS/DSP/Source/FastMathFunctions/arm_sqrt_q31.c \
 	app/drone_app.c \
 	app/main.c
 
