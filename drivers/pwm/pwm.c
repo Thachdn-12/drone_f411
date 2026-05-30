@@ -69,20 +69,20 @@ void pwm_init(void)
 
     /* MODER = Alternate Function */
     gpio_mode(GPIOA, 8, GPIO_AF);       // GPIOA_MODER |=  (0xAA << 16);
-    gpio_mode(GPIOA, 9, GPIO_AF);       // GPIOA_MODER |=  (0xAA << 16);
-    gpio_mode(GPIOA, 10, GPIO_AF);      // GPIOA_MODER |=  (0xAA << 16);
+    //gpio_mode(GPIOA, 9, GPIO_AF);       // GPIOA_MODER |=  (0xAA << 16);
+    //gpio_mode(GPIOA, 10, GPIO_AF);      // GPIOA_MODER |=  (0xAA << 16);
     gpio_mode(GPIOA, 11, GPIO_AF) ;     // GPIOA_MODER |=  (0xAA << 16);
 
     /* High speed */
     gpio_speed(GPIOA, 8, GPIO_HIGH_SPEED);
-    gpio_speed(GPIOA, 9, GPIO_HIGH_SPEED);
-    gpio_speed(GPIOA, 10, GPIO_HIGH_SPEED);
+    //gpio_speed(GPIOA, 9, GPIO_HIGH_SPEED);
+    //gpio_speed(GPIOA, 10, GPIO_HIGH_SPEED);
     gpio_speed(GPIOA, 11, GPIO_HIGH_SPEED);
 
     /* AFRH AF1 */
     gpio_af(GPIOA, 8, 0x1);
-    gpio_af(GPIOA, 9, 0x1);
-    gpio_af(GPIOA, 10, 0x1);
+    //gpio_af(GPIOA, 9, 0x1);
+    //gpio_af(GPIOA, 10, 0x1);
     gpio_af(GPIOA, 11, 0x1);
 
     /* =====================================================
@@ -110,7 +110,7 @@ void pwm_init(void)
      */
 
     TIM1_ARR = 20000 - 1;
-
+  
     /* =====================================================
      * PWM Mode 1
      * OCxM = 110
@@ -120,7 +120,7 @@ void pwm_init(void)
     /* CH1 + CH2 */
     TIM1_CCMR1 |= (6 << 4);
     TIM1_CCMR1 |= (1 << 3);
-
+    
     TIM1_CCMR1 |= (6 << 12);
     TIM1_CCMR1 |= (1 << 11);
 
@@ -140,6 +140,10 @@ void pwm_init(void)
     TIM1_CCER |= (1 << 8);
     TIM1_CCER |= (1 << 12);
 
+     /* =====================================================
+     * Initial pulse width
+     * ESC safe minimum
+     * ===================================================== */
     /* =====================================================
      * Initial pulse width
      * ESC safe minimum

@@ -4,6 +4,8 @@
 #include "i2c.h"
 #include "pwm.h"
 #include "adc.h"
+#include "mpu6050.h"
+#include "task_imu.h"
 
 /* =========================================================
  * App Entry
@@ -20,22 +22,19 @@ int main(void)
     /* =====================================================
      * Core Drivers
      * ===================================================== */
-
-    systick_init(100000000);
-
+    
     uart_init();
-
+    systick_init(100000000);
 
     /* =====================================================
      * Peripheral Drivers
      * ===================================================== */
 
     i2c_init();
-
     pwm_init();
-
     adc_init();
-
+    mpu6050_init();
+    task_imu_init();
     /* =====================================================
      * Boot Log
      * ===================================================== */
@@ -52,7 +51,8 @@ int main(void)
     uart_printf("[OK] I2C INIT\r\n");
     uart_printf("[OK] PWM INIT\r\n");
     uart_printf("[OK] ADC INIT\r\n");
-
+    uart_printf("[OK] MPU6050 INIT\r\n");
+    uart_printf("[OK] IMU TASK INIT\r\n");
     /* =====================================================
      * Start Application
      * ===================================================== */

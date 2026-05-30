@@ -38,7 +38,6 @@ int mpu6050_init(void)
         uart_printf("MPU: wakeup failed\r\n");
         return -1;
     }
-
     delay_ms(10);
 
     /* Read WHO_AM_I */
@@ -47,10 +46,10 @@ int mpu6050_init(void)
         uart_printf("MPU: WHO_AM_I read failed\r\n");
         return -1;
     }
+    
+    uart_printf("MPU WHO_AM_I = %u\r\n", id);
 
-    uart_printf("MPU WHO_AM_I = 0x%02X\r\n", id);
-
-    if (id != 0x68)
+    if ((id != 0x68) && (id != 0x70))
     {
         uart_printf("MPU: invalid device\r\n");
         return -1;
@@ -68,7 +67,6 @@ int mpu6050_init(void)
 int mpu6050_read_raw(mpu6050_raw_t *raw)
 {
     uint8_t buf[14];
-
     if (raw == 0)
     {
         return -1;
@@ -83,9 +81,9 @@ int mpu6050_read_raw(mpu6050_raw_t *raw)
 
     if (mpu6050_read_bytes(MPU6050_REG_ACCEL_XH, buf, 14) != 0)
     {
+        uart_printf("READ RAW FAIL\r\n");
         return -1;
     }
-
     raw->ax = (int16_t)((buf[0] << 8) | buf[1]);
     raw->ay = (int16_t)((buf[2] << 8) | buf[3]);
     raw->az = (int16_t)((buf[4] << 8) | buf[5]);

@@ -82,20 +82,26 @@ static void i2c_stop(void)
     I2C1_CR1 |= I2C_CR1_STOP;
 }
 
-static void i2c_send_addr(uint8_t addr)
+static void i2c_send_addr_write(uint8_t dev_addr)
 {
-    I2C1_DR = addr;
+    I2C1_DR = (dev_addr << 1);
 
     while (!(I2C1_SR1 & I2C_SR1_ADDR))
     {
     }
 
-    /*
-     * Clear ADDR flag
-     */
-
+    /* Clear ADDR */
     (void)I2C1_SR1;
     (void)I2C1_SR2;
+}
+
+static void i2c_send_addr_read(uint8_t dev_addr)
+{
+    I2C1_DR = (dev_addr << 1) | 1;
+
+    while (!(I2C1_SR1 & I2C_SR1_ADDR))
+    {
+    }
 }
 
 static void i2c_write_byte(uint8_t data)
@@ -147,30 +153,30 @@ void i2c_init(void)
     RCC_APB1ENR |= (1 << 21);  /* I2C1 */
 
     /* =====================================================
-     * PB8 -> I2C1_SCL
-     * PB9 -> I2C1_SDA
+     * PB6 -> I2C1_SCL
+     * PB7 -> I2C1_SDA
      * AF4
      * ===================================================== */
 
     /* Alternate function */
-    gpio_mode(GPIOB, 8, GPIO_AF);
-    gpio_mode(GPIOB, 9, GPIO_AF);
+    gpio_mode(GPIOB, 6, GPIO_AF);
+    gpio_mode(GPIOB, 7, GPIO_AF);
 
     /* Open drain */
-    gpio_output_type(GPIOB, 8, GPIO_OPEN_DRAIN);
-    gpio_output_type(GPIOB, 9, GPIO_OPEN_DRAIN);
+    gpio_output_type(GPIOB, 6, GPIO_OPEN_DRAIN);
+    gpio_output_type(GPIOB, 7, GPIO_OPEN_DRAIN);
 
     /* High speed */
-    gpio_speed(GPIOB, 8, GPIO_HIGH_SPEED);
-    gpio_speed(GPIOB, 9, GPIO_HIGH_SPEED);
+    gpio_speed(GPIOB, 6, GPIO_HIGH_SPEED);
+    gpio_speed(GPIOB, 7, GPIO_HIGH_SPEED);
 
     /* Pull-up */
-    gpio_pull(GPIOB, 8, GPIO_PULL_UP);
-    gpio_pull(GPIOB, 9, GPIO_PULL_UP);
+    gpio_pull(GPIOB, 6, GPIO_PULL_UP);
+    gpio_pull(GPIOB, 7, GPIO_PULL_UP);
 
     /* AF4 */
-    gpio_af(GPIOB, 8, 0x4);
-    gpio_af(GPIOB, 9, 0x4);
+    gpio_af(GPIOB, 6, 0x4);
+    gpio_af(GPIOB, 7, 0x4);
 
     /* =====================================================
      * Reset I2C
@@ -182,19 +188,19 @@ void i2c_init(void)
      * APB1 clock = 50MHz
      */
 
-    I2C1_CR2 = 50;
+    I2C1_CR2 = 16;
 
     /*
      * Standard mode 100kHz
      */
 
-    I2C1_CCR = 250;
+    I2C1_CCR = 80;
 
     /*
      * Maximum rise time
      */
 
-    I2C1_TRISE = 51;
+    I2C1_TRISE = 17;
 
     /* Enable ACK */
     I2C1_CR1 |= I2C_CR1_ACK;
@@ -216,25 +222,30 @@ int i2c_write_reg(uint8_t dev_addr,
     }
 
     i2c_start();
-
     /*
      * Write mode
      */
 
-    i2c_send_addr((dev_addr << 1) | 0);
-
+    i2c_send_addr_write(dev_addr);
     i2c_write_byte(reg);
-
     i2c_write_byte(data);
-
     i2c_stop();
-
     return 0;
 }
 
 /* =========================================================
  * Read Register
  * ========================================================= */
+/**
+ * Flow read 1 byte from register
+ * 1. Start
+ * 2. Send device address with write bit ADDR(R)
+ * 3. ACK = 0
+ * 4. ADDR clear
+ * 5. STOP
+ * 6. RXNE
+ * 7. read DR
+ */
 
 int i2c_read_reg(uint8_t dev_addr,
                  uint8_t reg,
@@ -255,7 +266,7 @@ int i2c_read_reg(uint8_t dev_addr,
 
     i2c_start();
 
-    i2c_send_addr((dev_addr << 1) | 0);
+    i2c_send_addr_write(dev_addr);
 
     i2c_write_byte(reg);
 
@@ -269,11 +280,27 @@ int i2c_read_reg(uint8_t dev_addr,
      * Read mode
      */
 
-    i2c_send_addr((dev_addr << 1) | 1);
+    i2c_send_addr_read(dev_addr);
 
-    *data = i2c_read_byte_nack();
+    /* Single byte receive sequence */  
 
-    i2c_stop();
+    I2C1_CR1 &= ~I2C_CR1_ACK;   
+
+    /* Clear ADDR AFTER ACK disable */
+    (void)I2C1_SR1;
+    (void)I2C1_SR2; 
+
+    /* STOP before receive */
+    I2C1_CR1 |= I2C_CR1_STOP;   
+
+    while (!(I2C1_SR1 & I2C_SR1_RXNE))
+    {
+    }   
+
+    *data = (uint8_t)I2C1_DR;   
+
+    /* Re-enable ACK */
+    I2C1_CR1 |= I2C_CR1_ACK;
 
     return 0;
 }
@@ -296,37 +323,51 @@ int i2c_read_bytes(uint8_t dev_addr,
     {
     }
 
-    /*
-     * Send register address
-     */
+    /* ---------------------------------
+     * Write register address
+     * --------------------------------- */
 
     i2c_start();
 
-    i2c_send_addr((dev_addr << 1) | 0);
+    i2c_send_addr_write(dev_addr);
 
     i2c_write_byte(reg);
 
-    /*
-     * Repeated start
-     */
+    /* ---------------------------------
+     * Repeated START
+     * --------------------------------- */
 
     i2c_start();
+    i2c_send_addr_read(dev_addr);
 
-    i2c_send_addr((dev_addr << 1) | 1);
+    /* Clear ADDR */
+    (void)I2C1_SR1;
+    (void)I2C1_SR2;
+
+    /* Enable ACK for multi-byte */
+    I2C1_CR1 |= I2C_CR1_ACK;
+   /* ---------------------------------
+     * Read bytes
+     * --------------------------------- */
 
     for (uint32_t i = 0; i < len; i++)
     {
+        /* Last byte */
         if (i == (len - 1))
         {
-            buf[i] = i2c_read_byte_nack();
+            I2C1_CR1 &= ~I2C_CR1_ACK;
+
+            i2c_stop();
         }
-        else
+
+        while (!(I2C1_SR1 & I2C_SR1_RXNE))
         {
-            buf[i] = i2c_read_byte_ack();
         }
+
+        buf[i] = (uint8_t)I2C1_DR;
     }
-
+    /* Restore ACK */
+    I2C1_CR1 |= I2C_CR1_ACK;
     i2c_stop();
-
     return 0;
 }

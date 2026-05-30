@@ -87,8 +87,15 @@ LDFLAGS += \
 	-T$(LDSCRIPT) \
 	-nostdlib \
 	-Wl,--gc-sections \
-	-Wl,-Map=$(MAP) \
+	-Wl,-Map=$(MAP) 
+
+# =========================================================
+# Libraries
+# =========================================================
+
+LIBS := \
 	-lgcc
+
 
 # =========================================================
 # Sources
@@ -105,6 +112,7 @@ SRC := \
 	drivers/adc/adc.c \
 	drivers/timer/timer.c \
 	drivers/mpu6050/mpu6050.c \
+	app/task_imu.c \
 	app/drone_app.c \
 	app/main.c
 
@@ -143,7 +151,7 @@ all: $(BIN)
 
 $(ELF): $(OBJ)
 	@mkdir -p $(BUILD_DIR)
-	$(LD) $(OBJ) $(LDFLAGS) -o $@
+	$(LD) $(OBJ) $(LDFLAGS) $(LIBS) -o $@
 	$(SIZE) $@
 
 # =========================================================
@@ -159,7 +167,8 @@ $(BIN): $(ELF)
 
 flash: $(ELF)
 	openocd \
-	-f scripts/openocd.cfg \
+	-f interface/stlink.cfg \
+	-f target/stm32f4x.cfg \
 	-c "program $(ELF) verify reset exit"
 
 # =========================================================

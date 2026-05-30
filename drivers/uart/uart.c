@@ -9,23 +9,23 @@
 
 #define RCC_BASE            0x40023800UL
 #define GPIOA_BASE          0x40020000UL
-#define USART2_BASE         0x40004400UL
+#define USART_BASE          0x40011000UL
 
 /* =========================================================
  * RCC
  * ========================================================= */
 
 #define RCC_AHB1ENR         (*(volatile uint32_t*)(RCC_BASE + 0x30))
-#define RCC_APB1ENR         (*(volatile uint32_t*)(RCC_BASE + 0x40))
+#define RCC_APB2ENR         (*(volatile uint32_t*)(RCC_BASE + 0x44))
 
 /* =========================================================
- * USART2 Registers
+ * USART Registers
  * ========================================================= */
 
-#define USART2_SR           (*(volatile uint32_t*)(USART2_BASE + 0x00))
-#define USART2_DR           (*(volatile uint32_t*)(USART2_BASE + 0x04))
-#define USART2_BRR          (*(volatile uint32_t*)(USART2_BASE + 0x08))
-#define USART2_CR1          (*(volatile uint32_t*)(USART2_BASE + 0x0C))
+#define USART_SR           (*(volatile uint32_t*)(USART_BASE + 0x00))
+#define USART_DR           (*(volatile uint32_t*)(USART_BASE + 0x04))
+#define USART_BRR          (*(volatile uint32_t*)(USART_BASE + 0x08))
+#define USART_CR1          (*(volatile uint32_t*)(USART_BASE + 0x0C))
 
 /* =========================================================
  * Bit Definitions
@@ -101,29 +101,29 @@ void uart_init(void)
      */
 
     RCC_AHB1ENR |= (1 << 0);   /* GPIOA */
-    RCC_APB1ENR |= (1 << 17);  /* USART2 */
+    RCC_APB2ENR |= (1 << 4);  /* USART */
 
     /* =====================================================
-     * PA2 -> USART2_TX
-     * PA3 -> USART2_RX
+     * PA9 -> TX
+     * PA10 -> RX
      * AF7
      * ===================================================== */
 
     /* Alternate function mode */
-    gpio_mode(GPIOA, 2, GPIO_AF);
-    gpio_mode(GPIOA, 3, GPIO_AF);
+    gpio_mode(GPIOA, 9, GPIO_AF);
+    gpio_mode(GPIOA, 10, GPIO_AF);
 
     /* High speed */
-    gpio_speed(GPIOA, 2, GPIO_HIGH_SPEED);
-    gpio_speed(GPIOA, 3, GPIO_HIGH_SPEED);
+    gpio_speed(GPIOA, 9, GPIO_HIGH_SPEED);
+    gpio_speed(GPIOA, 10, GPIO_HIGH_SPEED);
 
     /* AF7 */
-    gpio_af(GPIOA, 2, 0x7);
-    gpio_af(GPIOA, 3, 0x7);
+    gpio_af(GPIOA, 9, 0x7);
+    gpio_af(GPIOA, 10, 0x7);
 
     /* =====================================================
      * USART Configuration
-     * APB1 = 50MHz
+     * APB2 = 50MHz
      * Baudrate = 115200
      * ===================================================== */
 
@@ -133,14 +133,14 @@ void uart_init(void)
      * USARTDIV ≈ 434
      */
 
-    USART2_BRR = 434;
+    USART_BRR = 139;
 
     /* Enable TX + RX */
-    USART2_CR1 |= USART_CR1_TE;
-    USART2_CR1 |= USART_CR1_RE;
+    USART_CR1 |= USART_CR1_TE;
+    USART_CR1 |= USART_CR1_RE;
 
     /* Enable USART */
-    USART2_CR1 |= USART_CR1_UE;
+    USART_CR1 |= USART_CR1_UE;
 }
 
 /* =========================================================
@@ -149,11 +149,11 @@ void uart_init(void)
 
 void uart_write_char(char c)
 {
-    while (!(USART2_SR & USART_SR_TXE))
+    while (!(USART_SR & USART_SR_TXE))
     {
     }
 
-    USART2_DR = c;
+    USART_DR = c;
 }
 
 /* =========================================================
@@ -174,11 +174,11 @@ void uart_write_string(const char *str)
 
 char uart_read_char(void)
 {
-    while (!(USART2_SR & USART_SR_RXNE))
+    while (!(USART_SR & USART_SR_RXNE))
     {
     }
 
-    return (char)USART2_DR;
+    return (char)USART_DR;
 }
 
 /* =========================================================
