@@ -8,6 +8,9 @@
 /* Vector table */
 .section .isr_vector, "a", %progbits
 .type g_pfnVectors, %object
+.extern SVC_Handler
+.extern PendSV_Handler
+.extern SysTick_Handler
 
 g_pfnVectors:
     .word _estack
@@ -25,10 +28,10 @@ g_pfnVectors:
     .word 0
     .word 0
 
-    .word Default_Handler /* SVC */
+    .word SVC_Handler /* SVC */
     .word Default_Handler /* DebugMon */
     .word 0
-    .word Default_Handler /* PendSV */
+    .word PendSV_Handler /* PendSV */
     .word SysTick_Handler /* SysTick */
 
     /* IRQs (rút gọn, sau này add thêm) */

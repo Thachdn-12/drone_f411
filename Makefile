@@ -38,6 +38,16 @@ CPUFLAGS := \
 	-mfloat-abi=hard
 
 # =========================================================
+# FreeRTOS Source Files
+# STM32F411 = Cortex-M4F
+# =========================================================
+FREERTOS_SRC := \
+	kernel/FreeRTOS/tasks.c \
+	kernel/FreeRTOS/queue.c \
+	kernel/FreeRTOS/list.c \
+	kernel/FreeRTOS/portable/GCC/ARM_CM4F/port.c \
+	kernel/FreeRTOS/portable/MemMang/heap_4.c
+# =========================================================
 # Compiler Flags
 # =========================================================
 
@@ -51,6 +61,9 @@ CFLAGS += \
 	-Wundef \
 	-O0 \
 	-g3 \
+	-DSTM32F411xE \
+	-DARM_MATH_CM4 \
+	-D__FPU_PRESENT=1 \
 	-ffreestanding \
 	-fdata-sections \
 	-ffunction-sections \
@@ -64,11 +77,14 @@ CFLAGS += \
 INCLUDES := \
 	-Icore \
 	-Iapp \
+	-Iconfig \
+	-Ikernel/FreeRTOS/include \
+	-Ikernel/FreeRTOS/portable/GCC/ARM_CM4F \
 	-Idrivers/gpio \
 	-Idrivers/systick \
 	-Idrivers/i2c \
 	-Idrivers/uart \
-	-Idrivers/mpu6050 \
+	-Idrivers/sensors/mpu6050 \
 	-Idrivers/pwm \
 	-Idrivers/adc \
 	-Idrivers/timer \
@@ -106,7 +122,7 @@ LIBS := \
 # Sources
 # =========================================================
 
-SRC := \
+SRC += \
 	core/startup_stm32f411.s \
 	core/system.c \
 	drivers/systick/systick.c \
@@ -116,10 +132,11 @@ SRC := \
 	drivers/pwm/pwm.c \
 	drivers/adc/adc.c \
 	drivers/timer/timer.c \
-	drivers/mpu6050/mpu6050.c \
+	drivers/sensors/mpu6050/mpu6050.c \
 	app/task_imu.c \
 	libs/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
 	libs/CMSIS/DSP/Source/FastMathFunctions/arm_sqrt_q31.c \
+	$(FREERTOS_SRC) \
 	app/drone_app.c \
 	app/main.c
 

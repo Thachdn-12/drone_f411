@@ -22,16 +22,17 @@
  * Globals
  * ========================================================= */
 
-static volatile uint32_t g_systick_ms = 0;
+//static volatile uint32_t g_systick_ms = 0;
 
 /* =========================================================
  * SysTick Interrupt Handler
  * ========================================================= */
 
-void SysTick_Handler(void)
-{
-    g_systick_ms++;
-}
+//void SysTick_Handler(void)
+//{
+//    //g_systick_ms++;
+//    xPortSysTickHandler();
+//}
 
 /* =========================================================
  * Initialize SysTick
@@ -85,7 +86,8 @@ void systick_init(uint32_t core_clock_hz)
 
 uint32_t systick_get_tick(void)
 {
-    return g_systick_ms;
+    //return g_systick_ms;
+    return xTaskGetTickCount();
 }
 
 /* =========================================================
