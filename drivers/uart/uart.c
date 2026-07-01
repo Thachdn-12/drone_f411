@@ -102,22 +102,22 @@ void uart_init(void)
     RCC_APB2ENR |= (1 << 4);  /* USART */
 
     /* =====================================================
-     * PA9 -> TX
-     * PA10 -> RX
+     * PA2 -> TX
+     * PA3 -> RX
      * AF7
      * ===================================================== */
 
     /* Alternate function mode */
-    gpio_mode(GPIOA, 9, GPIO_AF);
-    gpio_mode(GPIOA, 10, GPIO_AF);
+    gpio_mode(GPIOA, 2, GPIO_AF);
+    gpio_mode(GPIOA, 3, GPIO_AF);
 
     /* High speed */
-    gpio_speed(GPIOA, 9, GPIO_HIGH_SPEED);
-    gpio_speed(GPIOA, 10, GPIO_HIGH_SPEED);
+    gpio_speed(GPIOA, 2, GPIO_HIGH_SPEED);
+    gpio_speed(GPIOA, 3, GPIO_HIGH_SPEED);
 
     /* AF7 */
-    gpio_af(GPIOA, 9, 0x7);
-    gpio_af(GPIOA, 10, 0x7);
+    gpio_af(GPIOA, 2, 0x7);
+    gpio_af(GPIOA, 3, 0x7);
 
     /* =====================================================
      * USART Configuration
