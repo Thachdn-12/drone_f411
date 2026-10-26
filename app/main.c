@@ -7,6 +7,7 @@
 #include "adc.h"
 #include "mpu6050.h"
 #include "task_imu.h"
+#include "timer.h"
 
 /* =========================================================
  * App Entry
@@ -48,6 +49,7 @@ int main(void)
     i2c_init();
     pwm_init();
     adc_init();
+    timer_init(1000);
     uart_printf("MPU6050: initializing on PB6/PB7...\r\n");
     if (mpu6050_init() != 0)
     {

@@ -27,7 +27,22 @@ SECTIONS
 
     } > FLASH
 
-    .data : AT(_etext)
+    /* Unwind metadata may be pulled in by libgcc (e.g. 64-bit division). */
+    .ARM.extab :
+    {
+        . = ALIGN(4);
+        *(.ARM.extab* .gnu.linkonce.armextab.*)
+    } > FLASH
+
+    .ARM.exidx :
+    {
+        . = ALIGN(4);
+        __exidx_start = .;
+        *(.ARM.exidx* .gnu.linkonce.armexidx.*)
+        __exidx_end = .;
+    } > FLASH
+
+    .data :
     {
         . = ALIGN(4);
 
@@ -39,9 +54,12 @@ SECTIONS
 
         _edata = .;
 
-    } > RAM
+    } > RAM AT> FLASH
 
-    .bss :
+    /* Startup copies initialized data from its actual Flash load address. */
+    _sidata = LOADADDR(.data);
+
+    .bss (NOLOAD) :
     {
         . = ALIGN(4);
 

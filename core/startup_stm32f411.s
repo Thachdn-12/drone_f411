@@ -11,6 +11,7 @@
 .extern SVC_Handler
 .extern PendSV_Handler
 .extern SysTick_Handler
+.extern TIM2_IRQHandler
 
 g_pfnVectors:
     .word _estack
@@ -34,8 +35,12 @@ g_pfnVectors:
     .word PendSV_Handler /* PendSV */
     .word SysTick_Handler /* SysTick */
 
-    /* IRQs (rút gọn, sau này add thêm) */
-    .rept 82
+    /* External IRQ 28 is TIM2. Keep the remaining vector slots in place. */
+    .rept 28
+    .word Default_Handler
+    .endr
+    .word TIM2_IRQHandler
+    .rept 53
     .word Default_Handler
     .endr
 
@@ -49,7 +54,7 @@ Reset_Handler:
     /* Copy .data */
     ldr r0, =_sdata
     ldr r1, =_edata
-    ldr r2, =_etext
+    ldr r2, =_sidata
 
 copy_data:
     cmp r0, r1

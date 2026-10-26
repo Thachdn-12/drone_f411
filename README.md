@@ -164,3 +164,27 @@ Boot logs are sent before SysTick and sensor initialization. The current
 application uses a bare-metal 1 ms SysTick at 16 MHz, without starting the
 FreeRTOS scheduler. I2C waits time out after 20 ms per stage; if MPU6050 fails
 initialization, the console prints `UART OK; MPU6050 unavailable` every second.
+
+## ADC
+
+ADC1 supports PA0 (`ADC_CHANNEL_0`) and PA1 (`ADC_CHANNEL_1`); PA2/PA3 are reserved
+for UART. It uses single software-triggered, right-aligned 12-bit conversions,
+480-cycle sampling, and APB2/4 ADC clock. Power-up stabilization and status flag
+handling follow ST's [RM0383 reference manual](https://www.st.com/resource/en/reference_manual/rm0383-stm32f411xce-advanced-armbased-32bit-mcus-stmicroelectronics.pdf).
+
+Call `systick_init(system_core_clock())` and `adc_init()` before reading:
+
+```c
+uint16_t raw;
+adc_status_t status = adc_read(ADC_CHANNEL_0, &raw);
+if (status == ADC_OK) {
+    uart_printf("ADC0=%u\r\n", (unsigned int)raw);
+}
+```
+
+The API now returns a status and writes the sample through an output pointer.
+Only `ADC_OK` updates the output; a valid zero reading is not an error. Invalid
+channels/NULL return `ADC_ERR_ARGUMENT`, and a disabled ADC returns
+`ADC_ERR_NOT_READY`. Reads time out after 10 ms with a finite polling fallback
+if SysTick stops. Timeout or overrun disables the ADC; call `adc_init()` to
+recover. The polling API is non-reentrant. Run `make test-adc` for host tests.

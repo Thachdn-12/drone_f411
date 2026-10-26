@@ -115,7 +115,7 @@ DEP := $(OBJ:.o=.d)
 
 .DEFAULT_GOAL := all
 
-.PHONY: all check-toolchain check-openocd flash debug gdb monitor clean
+.PHONY: all check-toolchain check-openocd flash debug gdb monitor test-pwm test-timer test-adc clean
 
 all: $(BIN)
 
@@ -168,6 +168,32 @@ monitor:
 	@test -c "$(PORT)" || { echo "Serial port not found: $(PORT). Set PORT=/dev/ttyUSBx"; exit 1; }
 	stty -F "$(PORT)" $(BAUD) raw -echo cs8 -parenb -cstopb -crtscts -ixon -ixoff
 	screen -fn "$(PORT)" "$(BAUD)"
+
+# Linux host regression test using mapped peripheral registers.
+HOST_CC ?= cc
+test-pwm:
+	@mkdir -p $(BUILD_DIR)/test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+		-Idrivers/pwm -Idrivers/gpio -Idrivers/uart -Icore \
+		tests/pwm_driver_test.c drivers/pwm/pwm.c drivers/gpio/gpio.c drivers/uart/uart.c \
+		-o $(BUILD_DIR)/test/pwm_driver_test
+	$(BUILD_DIR)/test/pwm_driver_test
+
+test-timer: $(ELF)
+	@mkdir -p $(BUILD_DIR)/test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Idrivers/timer -Idrivers/gpio -Icore \
+		tests/timer_driver_test.c drivers/timer/timer.c -o $(BUILD_DIR)/test/timer_driver_test
+	$(BUILD_DIR)/test/timer_driver_test
+	$(OBJCOPY) -O binary --only-section=.text $(ELF) $(BUILD_DIR)/test/timer_text.bin
+	python3 tests/timer_vector_test.py $(BUILD_DIR)/test/timer_text.bin $(ELF) $(PREFIX)nm
+
+test-adc:
+	@mkdir -p $(BUILD_DIR)/test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+		-Idrivers/adc -Idrivers/gpio -Idrivers/uart -Idrivers/pwm -Idrivers/systick -Icore \
+		tests/adc_driver_test.c drivers/adc/adc.c drivers/gpio/gpio.c drivers/uart/uart.c drivers/pwm/pwm.c \
+		-o $(BUILD_DIR)/test/adc_driver_test
+	$(BUILD_DIR)/test/adc_driver_test
 
 clean:
 	rm -rf $(BUILD_DIR)

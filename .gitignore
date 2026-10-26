@@ -1,6 +1,6 @@
 .vscode/
 output/
 *.o
-test/
+tests/
 toolchains/
 tools/
