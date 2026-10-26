@@ -1,3 +1,6 @@
-.vscode
-output
+.vscode/
+output/
 *.o
+test/
+toolchains/
+tools/

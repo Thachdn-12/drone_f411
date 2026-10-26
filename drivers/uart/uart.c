@@ -1,20 +1,19 @@
 #include "uart.h"
 #include "gpio.h"
-#include "systick.h"
 #include <stdarg.h>
 
 /* =========================================================
  * Base Addresses
  * ========================================================= */
 
-#define USART_BASE          0x40011000UL
+#define USART_BASE          0x40004400UL /* USART2 */
 
 /* =========================================================
  * RCC
  * ========================================================= */
 
 #define RCC_AHB1ENR         (*(volatile uint32_t*)(RCC_BASE + 0x30))
-#define RCC_APB2ENR         (*(volatile uint32_t*)(RCC_BASE + 0x44))
+#define RCC_APB1ENR         (*(volatile uint32_t*)(RCC_BASE + 0x40))
 
 /* =========================================================
  * USART Registers
@@ -24,6 +23,8 @@
 #define USART_DR           (*(volatile uint32_t*)(USART_BASE + 0x04))
 #define USART_BRR          (*(volatile uint32_t*)(USART_BASE + 0x08))
 #define USART_CR1          (*(volatile uint32_t*)(USART_BASE + 0x0C))
+#define USART_CR2          (*(volatile uint32_t*)(USART_BASE + 0x10))
+#define USART_CR3          (*(volatile uint32_t*)(USART_BASE + 0x14))
 
 /* =========================================================
  * Bit Definitions
@@ -99,7 +100,8 @@ void uart_init(void)
      */
 
     RCC_AHB1ENR |= (1 << 0);   /* GPIOA */
-    RCC_APB2ENR |= (1 << 4);  /* USART */
+    RCC_APB1ENR |= (1 << 17);  /* USART2 */
+    (void)RCC_APB1ENR;
 
     /* =====================================================
      * PA2 -> TX
@@ -118,27 +120,28 @@ void uart_init(void)
     /* AF7 */
     gpio_af(GPIOA, 2, 0x7);
     gpio_af(GPIOA, 3, 0x7);
+    gpio_output_type(GPIOA, 2, GPIO_PUSH_PULL);
+    gpio_pull(GPIOA, 2, GPIO_NO_PULL);
+    gpio_pull(GPIOA, 3, GPIO_PULL_UP);
 
     /* =====================================================
      * USART Configuration
-     * APB2 = 50MHz
+     * APB1 = 16MHz (reset HSI clock, no PLL configured)
      * Baudrate = 115200
      * ===================================================== */
 
     /*
-     * 50MHz / 115200
-     *
-     * USARTDIV ≈ 434
+     * BRR = round(16000000 / 115200) = 139 (oversampling by 16)
      */
 
+    /* Explicit 8N1, no flow control, oversampling by 16. */
+    USART_CR1 = 0;
+    USART_CR2 = 0;
+    USART_CR3 = 0;
     USART_BRR = 139;
 
     /* Enable TX + RX */
-    USART_CR1 |= USART_CR1_TE;
-    USART_CR1 |= USART_CR1_RE;
-
-    /* Enable USART */
-    USART_CR1 |= USART_CR1_UE;
+    USART_CR1 = USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
 }
 
 /* =========================================================

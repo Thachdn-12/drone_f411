@@ -68,13 +68,14 @@ zero_bss:
 zero_loop:
     cmp r0, r1
     bcc zero_word
-    b main
+    b init_system
 
 zero_word:
     movs r2, #0
     str r2, [r0], #4
     b zero_loop
 
+init_system:
     bl system_init
 /* Call main */
     bl main

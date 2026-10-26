@@ -50,13 +50,10 @@ void adc_init(void)
      *
      * PA0 -> ADC_IN0
      * PA1 -> ADC_IN1
-     * PA2 -> ADC_IN2
-     * PA3 -> ADC_IN3
+     * PA2 / PA3 are reserved for USART2 TX / RX.
      * ===================================================== */
     gpio_mode(GPIOA, 0, GPIO_ANALOG); // GPIOA_MODER |= (0xF << 0);
     gpio_mode(GPIOA, 1, GPIO_ANALOG); // GPIOA_MODER |= (0xF << 0);
-    gpio_mode(GPIOA, 2, GPIO_ANALOG); // GPIOA_MODER |= (0xF << 0);
-    gpio_mode(GPIOA, 3, GPIO_ANALOG); // GPIOA_MODER |= (0xF << 0);
 
     /* =====================================================
      * ADC Configuration
@@ -69,8 +66,6 @@ void adc_init(void)
 
     ADC_SMPR2 |= (7 << (0 * 3));
     ADC_SMPR2 |= (7 << (1 * 3));
-    ADC_SMPR2 |= (7 << (2 * 3));
-    ADC_SMPR2 |= (7 << (3 * 3));
 
     /*
      * Enable ADC

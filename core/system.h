@@ -7,7 +7,8 @@
  * Core Clock
  * ========================================================= */
 
-#define SYSTEM_CORE_CLOCK_HZ 100000000UL
+/* Reset HSI clock; no PLL or bus prescalers are configured. */
+#define SYSTEM_CORE_CLOCK_HZ 16000000UL
 
 /* =========================================================
  * System APIs

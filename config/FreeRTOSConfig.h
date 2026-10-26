@@ -3,7 +3,7 @@
 
 #define vPortSVCHandler     SVC_Handler
 #define xPortPendSVHandler  PendSV_Handler
-#define xPortSysTickHandler SysTick_Handler
+/* The current main loop owns SysTick; no FreeRTOS scheduler is started. */
 
 #define configUSE_PREEMPTION                    1
 #define configCPU_CLOCK_HZ                      84000000UL
