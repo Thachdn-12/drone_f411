@@ -7,6 +7,7 @@
 #include "adc.h"
 #include "mpu6050.h"
 #include "task_imu.h"
+#include "timer.h"
 
 /* =========================================================
  * App Entry
@@ -25,23 +26,8 @@ int main(void)
      * ===================================================== */
     
     uart_init();
-    systick_init(100000000);
-
-    /* =====================================================
-     * Peripheral Drivers
-     * ===================================================== */
-
-    i2c_init();
-    pwm_init();
-    adc_init();
-    system_init();
-    mpu6050_init();
-    task_imu_init();
-    /* =====================================================
-     * Boot Log
-     * ===================================================== */
-
-    uart_printf("====================================\r\n");
+    /* Print before interrupts, delays or sensor access can block boot. */
+    uart_printf("\r\n====================================\r\n");
     uart_printf(" _____ ___  ____  __   __\r\n");
     uart_printf("████████╗ ██████╗ ██████╗ ██╗   ██╗\r\n");
     uart_printf("╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝\r\n");
@@ -50,8 +36,32 @@ int main(void)
     uart_printf("   ██║   ╚██████╔╝██████╔╝   ██║    \r\n");
     uart_printf("   ╚═╝    ╚═════╝ ╚═════╝    ╚═╝    \r\n");
     uart_printf("====================================\r\n");
-    uart_printf("#  Build : %s %s                     #\r\n",__DATE__, __TIME__);
+    uart_printf("Drone F411 - USART2 PA2/PA3 115200 8N1\r\n");
+    uart_printf("Build: %s %s\r\n", __DATE__, __TIME__);
+    uart_printf("Core clock: %u Hz\r\n", system_core_clock());
     uart_printf("====================================\r\n");
+    systick_init(system_core_clock());
+
+    /* =====================================================
+     * Peripheral Drivers
+     * ===================================================== */
+
+    i2c_init();
+    pwm_init();
+    adc_init();
+    timer_init(1000);
+    uart_printf("MPU6050: initializing on PB6/PB7...\r\n");
+    if (mpu6050_init() != 0)
+    {
+        /* Keep the console alive even when the sensor is absent. */
+        while (1)
+        {
+            uart_printf("UART OK; MPU6050 unavailable (check PB6/PB7)\r\n");
+            delay_ms(1000);
+        }
+    }
+    task_imu_init();
+    uart_printf("MPU6050: ready\r\n");
     /* =====================================================
      * Start Application
      * ===================================================== */

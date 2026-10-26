@@ -1,8 +1,8 @@
 /* =========================================================
  * File: drivers/i2c/i2c.c
  * STM32F411 I2C1 Driver
- * PB8 -> SCL
- * PB9 -> SDA
+ * PB6 -> SCL
+ * PB7 -> SDA
  * ========================================================= */
 
 #include "i2c.h"
@@ -59,20 +59,65 @@
 #define I2C_SR1_BTF         (1 << 2)
 #define I2C_SR1_RXNE        (1 << 6)
 #define I2C_SR1_TXE         (1 << 7)
+#define I2C_SR1_ERRORS      ((1 << 8) | (1 << 9) | (1 << 10) | (1 << 11))
 
 #define I2C_SR2_BUSY        (1 << 1)
+#define I2C_TIMEOUT_MS      20U
 
 /* =========================================================
  * Local Helpers
  * ========================================================= */
 
-static void i2c_start(void)
+/* SysTick must be initialized before using these blocking transactions. */
+static int i2c_wait_sr1(uint32_t flag)
+{
+    uint32_t start = systick_get_tick();
+
+    for (;;)
+    {
+        uint32_t status = I2C1_SR1;
+        if (status & I2C_SR1_ERRORS)
+        {
+            return -1;
+        }
+        if (status & flag)
+        {
+            return 0;
+        }
+        if ((uint32_t)(systick_get_tick() - start) >= I2C_TIMEOUT_MS)
+        {
+            return -1;
+        }
+    }
+}
+
+static int i2c_wait_idle(void)
+{
+    uint32_t start = systick_get_tick();
+
+    while (I2C1_SR2 & I2C_SR2_BUSY)
+    {
+        if ((uint32_t)(systick_get_tick() - start) >= I2C_TIMEOUT_MS)
+        {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int i2c_abort(void)
+{
+    I2C1_CR1 |= I2C_CR1_STOP;
+    I2C1_SR1 &= ~I2C_SR1_ERRORS;
+    I2C1_CR1 |= I2C_CR1_ACK;
+    return -1;
+}
+
+static int i2c_start(void)
 {
     I2C1_CR1 |= I2C_CR1_START;
 
-    while (!(I2C1_SR1 & I2C_SR1_SB))
-    {
-    }
+    return i2c_wait_sr1(I2C_SR1_SB);
 }
 
 static void i2c_stop(void)
@@ -80,61 +125,38 @@ static void i2c_stop(void)
     I2C1_CR1 |= I2C_CR1_STOP;
 }
 
-static void i2c_send_addr_write(uint8_t dev_addr)
+static int i2c_send_addr_write(uint8_t dev_addr)
 {
     I2C1_DR = (dev_addr << 1);
 
-    while (!(I2C1_SR1 & I2C_SR1_ADDR))
+    if (i2c_wait_sr1(I2C_SR1_ADDR) != 0)
     {
+        return -1;
     }
 
     /* Clear ADDR */
     (void)I2C1_SR1;
     (void)I2C1_SR2;
+    return 0;
 }
 
-static void i2c_send_addr_read(uint8_t dev_addr)
+static int i2c_send_addr_read(uint8_t dev_addr)
 {
     I2C1_DR = (dev_addr << 1) | 1;
 
-    while (!(I2C1_SR1 & I2C_SR1_ADDR))
-    {
-    }
+    return i2c_wait_sr1(I2C_SR1_ADDR);
 }
 
-static void i2c_write_byte(uint8_t data)
+static int i2c_write_byte(uint8_t data)
 {
-    while (!(I2C1_SR1 & I2C_SR1_TXE))
+    if (i2c_wait_sr1(I2C_SR1_TXE) != 0)
     {
+        return -1;
     }
 
     I2C1_DR = data;
 
-    while (!(I2C1_SR1 & I2C_SR1_BTF))
-    {
-    }
-}
-
-static uint8_t i2c_read_byte_ack(void)
-{
-    I2C1_CR1 |= I2C_CR1_ACK;
-
-    while (!(I2C1_SR1 & I2C_SR1_RXNE))
-    {
-    }
-
-    return (uint8_t)I2C1_DR;
-}
-
-static uint8_t i2c_read_byte_nack(void)
-{
-    I2C1_CR1 &= ~I2C_CR1_ACK;
-
-    while (!(I2C1_SR1 & I2C_SR1_RXNE))
-    {
-    }
-
-    return (uint8_t)I2C1_DR;
+    return i2c_wait_sr1(I2C_SR1_BTF);
 }
 
 /* =========================================================
@@ -183,7 +205,7 @@ void i2c_init(void)
     I2C1_CR1 = 0;
 
     /*
-     * APB1 clock = 50MHz
+     * APB1 clock = 16MHz (reset HSI clock)
      */
 
     I2C1_CR2 = 16;
@@ -215,18 +237,14 @@ int i2c_write_reg(uint8_t dev_addr,
                   uint8_t reg,
                   uint8_t data)
 {
-    while (I2C1_SR2 & I2C_SR2_BUSY)
+    if ((i2c_wait_idle() != 0) ||
+        (i2c_start() != 0) ||
+        (i2c_send_addr_write(dev_addr) != 0) ||
+        (i2c_write_byte(reg) != 0) ||
+        (i2c_write_byte(data) != 0))
     {
+        return i2c_abort();
     }
-
-    i2c_start();
-    /*
-     * Write mode
-     */
-
-    i2c_send_addr_write(dev_addr);
-    i2c_write_byte(reg);
-    i2c_write_byte(data);
     i2c_stop();
     return 0;
 }
@@ -254,31 +272,15 @@ int i2c_read_reg(uint8_t dev_addr,
         return -1;
     }
 
-    while (I2C1_SR2 & I2C_SR2_BUSY)
+    if ((i2c_wait_idle() != 0) ||
+        (i2c_start() != 0) ||
+        (i2c_send_addr_write(dev_addr) != 0) ||
+        (i2c_write_byte(reg) != 0) ||
+        (i2c_start() != 0) ||
+        (i2c_send_addr_read(dev_addr) != 0))
     {
+        return i2c_abort();
     }
-
-    /*
-     * Write register address
-     */
-
-    i2c_start();
-
-    i2c_send_addr_write(dev_addr);
-
-    i2c_write_byte(reg);
-
-    /*
-     * Repeated start
-     */
-
-    i2c_start();
-
-    /*
-     * Read mode
-     */
-
-    i2c_send_addr_read(dev_addr);
 
     /* Single byte receive sequence */  
 
@@ -291,9 +293,10 @@ int i2c_read_reg(uint8_t dev_addr,
     /* STOP before receive */
     I2C1_CR1 |= I2C_CR1_STOP;   
 
-    while (!(I2C1_SR1 & I2C_SR1_RXNE))
+    if (i2c_wait_sr1(I2C_SR1_RXNE) != 0)
     {
-    }   
+        return i2c_abort();
+    }
 
     *data = (uint8_t)I2C1_DR;   
 
@@ -317,26 +320,15 @@ int i2c_read_bytes(uint8_t dev_addr,
         return -1;
     }
 
-    while (I2C1_SR2 & I2C_SR2_BUSY)
+    if ((i2c_wait_idle() != 0) ||
+        (i2c_start() != 0) ||
+        (i2c_send_addr_write(dev_addr) != 0) ||
+        (i2c_write_byte(reg) != 0) ||
+        (i2c_start() != 0) ||
+        (i2c_send_addr_read(dev_addr) != 0))
     {
+        return i2c_abort();
     }
-
-    /* ---------------------------------
-     * Write register address
-     * --------------------------------- */
-
-    i2c_start();
-
-    i2c_send_addr_write(dev_addr);
-
-    i2c_write_byte(reg);
-
-    /* ---------------------------------
-     * Repeated START
-     * --------------------------------- */
-
-    i2c_start();
-    i2c_send_addr_read(dev_addr);
 
     /* Clear ADDR */
     (void)I2C1_SR1;
@@ -358,8 +350,9 @@ int i2c_read_bytes(uint8_t dev_addr,
             i2c_stop();
         }
 
-        while (!(I2C1_SR1 & I2C_SR1_RXNE))
+        if (i2c_wait_sr1(I2C_SR1_RXNE) != 0)
         {
+            return i2c_abort();
         }
 
         buf[i] = (uint8_t)I2C1_DR;

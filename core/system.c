@@ -15,6 +15,8 @@ void system_init(void)
      */
 
     SCB_CPACR |= (0xFU << 20);
+    __asm volatile ("dsb" ::: "memory");
+    __asm volatile ("isb" ::: "memory");
 }
 
 uint32_t system_core_clock(void)

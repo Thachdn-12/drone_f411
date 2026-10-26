@@ -1,224 +1,201 @@
 # =========================================================
-# Project
+# Drone F411 - STM32F411CEU6 (Cortex-M4F)
 # =========================================================
-
-PROJECT := drone
-
-# =========================================================
-# Build Output
-# =========================================================
-
+PROJECT   := drone
 BUILD_DIR := output
+ELF       := $(BUILD_DIR)/$(PROJECT).elf
+BIN       := $(BUILD_DIR)/$(PROJECT).bin
+MAP       := $(BUILD_DIR)/$(PROJECT).map
 
-ELF := $(BUILD_DIR)/$(PROJECT).elf
-BIN := $(BUILD_DIR)/$(PROJECT).bin
-MAP := $(BUILD_DIR)/$(PROJECT).map
+# Use the repository-local toolchain if present, otherwise search PATH.
+# Override with: make TOOLCHAIN_DIR=/path/to/toolchain/bin
+LOCAL_TOOLCHAIN_DIR := toolchains/bin
+TOOLCHAIN_DIR ?= $(if $(wildcard $(LOCAL_TOOLCHAIN_DIR)/arm-none-eabi-gcc),$(LOCAL_TOOLCHAIN_DIR))
+PREFIX        := $(if $(strip $(TOOLCHAIN_DIR)),$(patsubst %/,%,$(TOOLCHAIN_DIR))/)arm-none-eabi-
+CC            := $(PREFIX)gcc
+LD            := $(PREFIX)gcc
+OBJCOPY       := $(PREFIX)objcopy
+SIZE          := $(PREFIX)size
+GDB           := $(PREFIX)gdb
 
-# =========================================================
-# Toolchain
-# =========================================================
+# Prefer the xPack OpenOCD bundled in tools/, otherwise search PATH.
+OPENOCD_DIR     ?= tools/xpack-openocd-0.12.0-7
+OPENOCD         ?= $(if $(wildcard $(OPENOCD_DIR)/bin/openocd),$(OPENOCD_DIR)/bin/openocd,openocd)
+OPENOCD_SCRIPTS ?= $(if $(wildcard $(OPENOCD_DIR)/openocd/scripts),$(OPENOCD_DIR)/openocd/scripts)
+OPENOCD_INTERFACE ?= interface/stlink.cfg
+OPENOCD_TARGET    ?= target/stm32f4x.cfg
+SWD_SPEED        ?= 1000
+GDB_PORT         ?= 3333
+PORT             ?= /dev/ttyUSB0
+BAUD             ?= 115200
 
-PREFIX := arm-none-eabi-
+# Select SWD explicitly; use software reset so an NRST wire is optional.
+OPENOCD_FLAGS = $(if $(strip $(OPENOCD_SCRIPTS)),-s "$(OPENOCD_SCRIPTS)") \
+    -f "$(OPENOCD_INTERFACE)" -c "transport select swd" \
+    -f "$(OPENOCD_TARGET)" -c "adapter speed $(SWD_SPEED)" \
+    -c "reset_config none" -c "gdb port $(GDB_PORT)"
 
-CC      := $(PREFIX)gcc
-LD      := $(PREFIX)gcc
-OBJCOPY := $(PREFIX)objcopy
-SIZE    := $(PREFIX)size
-GDB     := $(PREFIX)gdb
+CPUFLAGS := -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
 
-# =========================================================
-# CPU / MCU
-# STM32F411 = Cortex-M4F
-# =========================================================
+CMSIS_DIR        := libs/CMSIS
+CMSIS_DRIVER_DIR := $(CMSIS_DIR)/Driver
+CMSIS_DEVICE_DIR := $(CMSIS_DRIVER_DIR)/Device/ST/STM32F4xx
+CMSIS_DSP_DIR    := $(CMSIS_DIR)/DSP
 
-CPUFLAGS := \
-	-mcpu=cortex-m4 \
-	-mthumb \
-	-mfpu=fpv4-sp-d16 \
-	-mfloat-abi=hard
+# CMSIS Driver currently contains headers only. Keep our own startup/system.c.
+CMSIS_INCLUDES := \
+    -I$(CMSIS_DEVICE_DIR)/Include \
+    -I$(CMSIS_DRIVER_DIR)/Include \
+    -I$(CMSIS_DIR)/Core/Include \
+    -I$(CMSIS_DSP_DIR)/Include \
+    -I$(CMSIS_DSP_DIR)/PrivateInclude
 
-# =========================================================
-# FreeRTOS Source Files
-# STM32F411 = Cortex-M4F
-# =========================================================
+# List individual DSP implementations, not the aggregate FastMathFunctions.c,
+# to avoid duplicate symbols. arm_sqrt_f32 is provided inline by DSP headers.
+CMSIS_DSP_SRC := \
+    $(CMSIS_DSP_DIR)/Source/FastMathFunctions/arm_atan2_f32.c
+
 FREERTOS_SRC := \
-	kernel/FreeRTOS/tasks.c \
-	kernel/FreeRTOS/queue.c \
-	kernel/FreeRTOS/list.c \
-	kernel/FreeRTOS/portable/GCC/ARM_CM4F/port.c \
-	kernel/FreeRTOS/portable/MemMang/heap_4.c
-# =========================================================
-# Compiler Flags
-# =========================================================
-
-CFLAGS := $(CPUFLAGS)
-
-CFLAGS += \
-	-std=c11 \
-	-Wall \
-	-Wextra \
-	-Wshadow \
-	-Wundef \
-	-O0 \
-	-g3 \
-	-DSTM32F411xE \
-	-DARM_MATH_CM4 \
-	-D__FPU_PRESENT=1 \
-	-ffreestanding \
-	-fdata-sections \
-	-ffunction-sections \
-	-fno-inline \
-	-fno-omit-frame-pointer
-
-# =========================================================
-# Includes
-# =========================================================
+    kernel/FreeRTOS/tasks.c \
+    kernel/FreeRTOS/queue.c \
+    kernel/FreeRTOS/list.c \
+    kernel/FreeRTOS/portable/GCC/ARM_CM4F/port.c \
+    kernel/FreeRTOS/portable/MemMang/heap_4.c
 
 INCLUDES := \
-	-Icore \
-	-Iapp \
-	-Iconfig \
-	-Ikernel/FreeRTOS/include \
-	-Ikernel/FreeRTOS/portable/GCC/ARM_CM4F \
-	-Idrivers/gpio \
-	-Idrivers/systick \
-	-Idrivers/i2c \
-	-Idrivers/uart \
-	-Idrivers/sensors/mpu6050 \
-	-Idrivers/pwm \
-	-Idrivers/adc \
-	-Idrivers/timer \
-	-Ilibs/CMSIS/Core/Include \
-	-Ilibs/CMSIS/DSP/Include/dsp \
-	-Ilibs/CMSIS/DSP/PrivateInclude \
-	-Ilibs/CMSIS/DSP/Include
+    -Icore \
+    -Iapp \
+    -Iconfig \
+    -Ikernel/FreeRTOS/include \
+    -Ikernel/FreeRTOS/portable/GCC/ARM_CM4F \
+    -Idrivers/gpio \
+    -Idrivers/systick \
+    -Idrivers/i2c \
+    -Idrivers/uart \
+    -Idrivers/sensors/mpu6050 \
+    -Idrivers/pwm \
+    -Idrivers/adc \
+    -Idrivers/timer \
+    $(CMSIS_INCLUDES)
 
+CPPFLAGS += -DSTM32F411xE -DARM_MATH_CM4 -D__FPU_PRESENT=1U $(INCLUDES)
 
-CFLAGS += $(INCLUDES)
-
-# =========================================================
-# Linker
-# =========================================================
+CFLAGS := $(CPUFLAGS) \
+    -std=c11 -Wall -Wextra -Wshadow -Wundef \
+    -O0 -g3 \
+    -ffreestanding -fdata-sections -ffunction-sections \
+    -fno-inline -fno-omit-frame-pointer \
+    -MMD -MP
 
 LDSCRIPT := core/linker_stm32f411.ld
+LDFLAGS := $(CPUFLAGS) -T$(LDSCRIPT) -nostdlib \
+    -Wl,--gc-sections -Wl,-Map=$(MAP)
+LIBS := -lgcc
 
-LDFLAGS := $(CPUFLAGS)
+SRC := \
+    core/startup_stm32f411.s \
+    core/system.c \
+    drivers/systick/systick.c \
+    drivers/gpio/gpio.c \
+    drivers/i2c/i2c.c \
+    drivers/uart/uart.c \
+    drivers/pwm/pwm.c \
+    drivers/adc/adc.c \
+    drivers/timer/timer.c \
+    drivers/sensors/mpu6050/mpu6050.c \
+    app/task_imu.c \
+    $(CMSIS_DSP_SRC) \
+    $(FREERTOS_SRC) \
+    app/drone_app.c \
+    app/main.c
 
-LDFLAGS += \
-	-T$(LDSCRIPT) \
-	-nostdlib \
-	-Wl,--gc-sections \
-	-Wl,-Map=$(MAP) 
+OBJ := $(addprefix $(BUILD_DIR)/,$(patsubst %.c,%.o,$(filter %.c,$(SRC))) \
+       $(patsubst %.s,%.o,$(filter %.s,$(SRC))))
+DEP := $(OBJ:.o=.d)
 
-# =========================================================
-# Libraries
-# =========================================================
+.DEFAULT_GOAL := all
 
-LIBS := \
-	-lgcc
-
-
-# =========================================================
-# Sources
-# =========================================================
-
-SRC += \
-	core/startup_stm32f411.s \
-	core/system.c \
-	drivers/systick/systick.c \
-	drivers/gpio/gpio.c \
-	drivers/i2c/i2c.c \
-	drivers/uart/uart.c \
-	drivers/pwm/pwm.c \
-	drivers/adc/adc.c \
-	drivers/timer/timer.c \
-	drivers/sensors/mpu6050/mpu6050.c \
-	app/task_imu.c \
-	libs/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
-	libs/CMSIS/DSP/Source/FastMathFunctions/arm_sqrt_q31.c \
-	$(FREERTOS_SRC) \
-	app/drone_app.c \
-	app/main.c
-
-# =========================================================
-# Objects
-# =========================================================
-
-OBJ := $(SRC:.c=.o)
-OBJ := $(OBJ:.s=.o)
-
-# =========================================================
-# Default Target
-# =========================================================
+.PHONY: all check-toolchain check-openocd flash debug gdb monitor test-pwm test-timer test-adc clean
 
 all: $(BIN)
 
-# =========================================================
-# Compile C
-# =========================================================
+check-toolchain:
+	@command -v "$(CC)" >/dev/null 2>&1 || { \
+	  echo "ERROR: ARM GCC not found: $(CC)"; \
+	  echo "Install ARM GNU Toolchain on PATH or extract it into toolchains/"; \
+	  echo "Or run: make TOOLCHAIN_DIR=/path/to/toolchain/bin"; \
+	  exit 1; \
+	}
 
-%.o: %.c
+check-openocd:
+	@command -v "$(OPENOCD)" >/dev/null 2>&1 || { \
+	  echo "ERROR: OpenOCD not found: $(OPENOCD)"; \
+	  echo "Run: make flash OPENOCD_DIR=/path/to/xpack-openocd"; \
+	  echo "Or set OPENOCD=/path/to/openocd OPENOCD_SCRIPTS=/path/to/scripts"; \
+	  exit 1; \
+	}
+
+$(BUILD_DIR)/%.o: %.c Makefile | check-toolchain
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-# =========================================================
-# Compile ASM
-# =========================================================
-
-%.o: %.s
+$(BUILD_DIR)/%.o: %.s Makefile | check-toolchain
 	@mkdir -p $(dir $@)
 	$(CC) $(CPUFLAGS) -c $< -o $@
 
-# =========================================================
-# Link ELF
-# =========================================================
-
-$(ELF): $(OBJ)
+$(ELF): $(OBJ) $(LDSCRIPT) | check-toolchain
 	@mkdir -p $(BUILD_DIR)
 	$(LD) $(OBJ) $(LDFLAGS) $(LIBS) -o $@
 	$(SIZE) $@
 
-# =========================================================
-# Generate BIN
-# =========================================================
-
 $(BIN): $(ELF)
 	$(OBJCOPY) -O binary $< $@
 
-# =========================================================
-# Flash
-# =========================================================
+flash: check-openocd $(ELF)
+	"$(OPENOCD)" $(OPENOCD_FLAGS) \
+		-c "program {$(ELF)} verify reset exit"
 
-flash: $(ELF)
-	openocd \
-	-f interface/stlink.cfg \
-	-f target/stm32f4x.cfg \
-	-c "program $(ELF) verify reset exit"
+debug: check-openocd
+	"$(OPENOCD)" $(OPENOCD_FLAGS)
 
-# =========================================================
-# OpenOCD Server
-# =========================================================
+gdb: $(ELF)
+	"$(GDB)" -q -nx "$(ELF)" \
+		-ex "target remote localhost:$(GDB_PORT)" \
+		-ex "monitor reset halt" -ex "tbreak main" -ex "continue"
 
-debug:
-	openocd -f scripts/openocd.cfg
+monitor:
+	@command -v screen >/dev/null 2>&1 || { echo "Install screen: sudo apt install screen"; exit 1; }
+	@test -c "$(PORT)" || { echo "Serial port not found: $(PORT). Set PORT=/dev/ttyUSBx"; exit 1; }
+	stty -F "$(PORT)" $(BAUD) raw -echo cs8 -parenb -cstopb -crtscts -ixon -ixoff
+	screen -fn "$(PORT)" "$(BAUD)"
 
-# =========================================================
-# GDB
-# =========================================================
+# Linux host regression test using mapped peripheral registers.
+HOST_CC ?= cc
+test-pwm:
+	@mkdir -p $(BUILD_DIR)/test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+		-Idrivers/pwm -Idrivers/gpio -Idrivers/uart -Icore \
+		tests/pwm_driver_test.c drivers/pwm/pwm.c drivers/gpio/gpio.c drivers/uart/uart.c \
+		-o $(BUILD_DIR)/test/pwm_driver_test
+	$(BUILD_DIR)/test/pwm_driver_test
 
-gdb:
-	$(GDB) $(ELF)
+test-timer: $(ELF)
+	@mkdir -p $(BUILD_DIR)/test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Idrivers/timer -Idrivers/gpio -Icore \
+		tests/timer_driver_test.c drivers/timer/timer.c -o $(BUILD_DIR)/test/timer_driver_test
+	$(BUILD_DIR)/test/timer_driver_test
+	$(OBJCOPY) -O binary --only-section=.text $(ELF) $(BUILD_DIR)/test/timer_text.bin
+	python3 tests/timer_vector_test.py $(BUILD_DIR)/test/timer_text.bin $(ELF) $(PREFIX)nm
 
-# =========================================================
-# Clean
-# =========================================================
+test-adc:
+	@mkdir -p $(BUILD_DIR)/test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+		-Idrivers/adc -Idrivers/gpio -Idrivers/uart -Idrivers/pwm -Idrivers/systick -Icore \
+		tests/adc_driver_test.c drivers/adc/adc.c drivers/gpio/gpio.c drivers/uart/uart.c drivers/pwm/pwm.c \
+		-o $(BUILD_DIR)/test/adc_driver_test
+	$(BUILD_DIR)/test/adc_driver_test
 
 clean:
 	rm -rf $(BUILD_DIR)
-	rm -f $(OBJ) *.elf *.bin *.map
 
-# =========================================================
-# Phony
-# =========================================================
-
-.PHONY: all flash debug gdb clean
+-include $(DEP)
