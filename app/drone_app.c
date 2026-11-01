@@ -5,6 +5,7 @@
 #include "pwm.h"
 #include "mpu6050.h"
 #include "task_imu.h"
+#include "task_baro.h"
 
 /* =========================================================
  * App Run
@@ -16,6 +17,7 @@ void drone_app_run(void)
     while (1)
     { 
         task_imu_run();
+        task_baro_run();
         const imu_state_t *imu = task_imu_get();
 
         uart_printf(
