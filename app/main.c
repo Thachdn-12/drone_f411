@@ -3,10 +3,12 @@
 #include "system.h"
 #include "gpio.h"
 #include "i2c.h"
+#include "spi.h"
 #include "pwm.h"
 #include "adc.h"
 #include "mpu6050.h"
 #include "task_imu.h"
+#include "task_baro.h"
 #include "timer.h"
 
 /* =========================================================
@@ -50,6 +52,13 @@ int main(void)
     pwm_init();
     adc_init();
     timer_init(1000);
+    spi1_init();
+    uart_printf("BMP280: initializing SPI1 PA4/PA5/PA6/PA7...\r\n");
+    bmp280_status_t baro_status = task_baro_init();
+    if (baro_status == BMP280_OK)
+        uart_printf("BMP280: ready\r\n");
+    else
+        uart_printf("BMP280: unavailable (%d), check SPI wiring\r\n", (int)baro_status);
     uart_printf("MPU6050: initializing on PB6/PB7...\r\n");
     if (mpu6050_init() != 0)
     {
@@ -57,11 +66,18 @@ int main(void)
         while (1)
         {
             uart_printf("UART OK; MPU6050 unavailable (check PB6/PB7)\r\n");
+            task_baro_run();
             delay_ms(1000);
         }
     }
     task_imu_init();
     uart_printf("MPU6050: ready\r\n");
+
+    uart_printf("[PWM] Check pwm value \n");
+    pwm_set_us(PWM_CH1, 1000);
+    pwm_set_us(PWM_CH2, 1250);
+    pwm_set_us(PWM_CH3, 1500);
+    pwm_set_us(PWM_CH4, 2000);
     /* =====================================================
      * Start Application
      * ===================================================== */
