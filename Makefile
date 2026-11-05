@@ -71,8 +71,10 @@ INCLUDES := \
     -Idrivers/gpio \
     -Idrivers/systick \
     -Idrivers/i2c \
+    -Idrivers/spi \
     -Idrivers/uart \
     -Idrivers/sensors/mpu6050 \
+    -Idrivers/sensors/bmp280 \
     -Idrivers/pwm \
     -Idrivers/adc \
     -Idrivers/timer \
@@ -97,13 +99,17 @@ SRC := \
     core/system.c \
     drivers/systick/systick.c \
     drivers/gpio/gpio.c \
+    drivers/gpio/gpio_exti.c \
     drivers/i2c/i2c.c \
+    drivers/spi/spi.c \
     drivers/uart/uart.c \
     drivers/pwm/pwm.c \
     drivers/adc/adc.c \
     drivers/timer/timer.c \
     drivers/sensors/mpu6050/mpu6050.c \
+    drivers/sensors/bmp280/bmp280.c \
     app/task_imu.c \
+    app/task_baro.c \
     $(CMSIS_DSP_SRC) \
     $(FREERTOS_SRC) \
     app/drone_app.c \
@@ -115,7 +121,7 @@ DEP := $(OBJ:.o=.d)
 
 .DEFAULT_GOAL := all
 
-.PHONY: all check-toolchain check-openocd flash debug gdb monitor test-pwm test-timer test-adc clean
+.PHONY: all check-toolchain check-openocd flash debug gdb monitor test-gpio test-pwm test-timer test-adc test-bmp280 test-spi clean
 
 all: $(BIN)
 
@@ -171,6 +177,16 @@ monitor:
 
 # Linux host regression test using mapped peripheral registers.
 HOST_CC ?= cc
+test-gpio: $(ELF)
+	@mkdir -p $(BUILD_DIR)/test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Wshadow -Werror \
+		-fsanitize=undefined -fno-sanitize-recover=undefined -Idrivers/gpio \
+		tests/gpio_driver_test.c drivers/gpio/gpio.c drivers/gpio/gpio_exti.c \
+		-o $(BUILD_DIR)/test/gpio_driver_test
+	$(BUILD_DIR)/test/gpio_driver_test
+	$(OBJCOPY) -O binary --only-section=.text $(ELF) $(BUILD_DIR)/test/gpio_text.bin
+	python3 tests/gpio_vector_test.py $(BUILD_DIR)/test/gpio_text.bin $(ELF) $(PREFIX)nm
+
 test-pwm:
 	@mkdir -p $(BUILD_DIR)/test
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
@@ -194,6 +210,22 @@ test-adc:
 		tests/adc_driver_test.c drivers/adc/adc.c drivers/gpio/gpio.c drivers/uart/uart.c drivers/pwm/pwm.c \
 		-o $(BUILD_DIR)/test/adc_driver_test
 	$(BUILD_DIR)/test/adc_driver_test
+
+test-bmp280:
+	@mkdir -p $(BUILD_DIR)/test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Wshadow -Werror \
+		-Iapp -Idrivers/sensors/bmp280 -Idrivers/spi -Idrivers/gpio -Idrivers/systick -Idrivers/uart \
+		tests/bmp280_driver_test.c drivers/sensors/bmp280/bmp280.c app/task_baro.c \
+		-o $(BUILD_DIR)/test/bmp280_driver_test
+	$(BUILD_DIR)/test/bmp280_driver_test
+
+test-spi:
+	@mkdir -p $(BUILD_DIR)/test
+	$(HOST_CC) -std=c11 -Wall -Wextra -Wshadow -Werror \
+		-Idrivers/spi -Idrivers/gpio -Idrivers/systick \
+		tests/spi_driver_test.c drivers/spi/spi.c drivers/gpio/gpio.c \
+		-o $(BUILD_DIR)/test/spi_driver_test
+	$(BUILD_DIR)/test/spi_driver_test
 
 clean:
 	rm -rf $(BUILD_DIR)

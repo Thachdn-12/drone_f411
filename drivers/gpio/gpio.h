@@ -90,6 +90,11 @@ typedef enum
 
 /* Function Prototypes */
 
+/* Pins are numbered 0..15 (not bit masks), on GPIOA..GPIOE.
+ * Invalid ports, pins or configuration values are ignored; invalid reads return 0.
+ * Call gpio_clock_enable() before accessing a port. Serialize configuration
+ * changes to the same port; serialize toggles of the same pin.
+ */
 void gpio_clock_enable(gpio_t *gpio);
 void gpio_mode(gpio_t *gpio, uint8_t pin, gpio_mode_t mode);
 void gpio_output_type(gpio_t *gpio, uint8_t pin, gpio_otype_t type);
@@ -99,5 +104,39 @@ void gpio_af(gpio_t *gpio, uint8_t pin, uint8_t af);
 void gpio_write(gpio_t *gpio, uint8_t pin, uint8_t state);
 void gpio_toggle(gpio_t *gpio, uint8_t pin);
 uint8_t gpio_read(gpio_t *gpio, uint8_t pin);
+
+typedef enum
+{
+    GPIO_EXTI_RISING = 1,
+    GPIO_EXTI_FALLING = 2,
+    GPIO_EXTI_BOTH = 3
+} gpio_exti_trigger_t;
+
+typedef enum
+{
+    GPIO_EXTI_OK = 0,
+    GPIO_EXTI_ERR_ARGUMENT = -1,
+    GPIO_EXTI_ERR_BUSY = -2,
+    GPIO_EXTI_ERR_NOT_ATTACHED = -3
+} gpio_exti_status_t;
+
+typedef void (*gpio_exti_callback_t)(gpio_t *gpio, uint8_t pin, void *context);
+
+/* Enables the GPIO/SYSCFG clocks, configures input/pull/edge and enables NVIC.
+ * Only one port can own EXTI line N at a time: PA0 and PB0 conflict.
+ * Attaching the same port/pin again replaces its configuration and callback.
+ * Call attach from main/thread context. The driver owns GPIO EXTI lines 0..15.
+ * IRQ groups use fixed priority 15 (lowest); callbacks run in interrupt context
+ * and must not block. No debounce is performed. context may be NULL and must
+ * remain valid until detached. Configuration updates preserve PRIMASK.
+ */
+gpio_exti_status_t gpio_exti_attach(gpio_t *gpio, uint8_t pin,
+                                    gpio_pull_t pull, gpio_exti_trigger_t trigger,
+                                    gpio_exti_callback_t callback, void *context);
+
+/* Removes only the matching port/pin; preserves other lines sharing its IRQ.
+ * Leaves GPIO mode/pull unchanged. Also callable from a callback.
+ */
+gpio_exti_status_t gpio_exti_detach(gpio_t *gpio, uint8_t pin);
 
 #endif

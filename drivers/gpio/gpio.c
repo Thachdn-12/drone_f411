@@ -5,6 +5,12 @@
  */
 #include "gpio.h"
 
+static int gpio_valid(gpio_t *gpio, uint8_t pin)
+{
+    return pin < 16U && (gpio == GPIOA || gpio == GPIOB || gpio == GPIOC ||
+                        gpio == GPIOD || gpio == GPIOE);
+}
+
 /**
  * @brief  Enable clock for GPIOX of STM32F411 Blackpill
  * @param  gpio: GPIO base address
@@ -13,19 +19,23 @@
 void gpio_clock_enable(gpio_t *gpio)
 {
     if (gpio == GPIOA)
-        RCC_AHB1ENR |= (1 << 0);
+        RCC_AHB1ENR |= (1U << 0);
 
     else if (gpio == GPIOB)
-        RCC_AHB1ENR |= (1 << 1);
+        RCC_AHB1ENR |= (1U << 1);
 
     else if (gpio == GPIOC)
-        RCC_AHB1ENR |= (1 << 2);
+        RCC_AHB1ENR |= (1U << 2);
 
     else if (gpio == GPIOD)
-        RCC_AHB1ENR |= (1 << 3);
+        RCC_AHB1ENR |= (1U << 3);
 
     else if (gpio == GPIOE)
-        RCC_AHB1ENR |= (1 << 4);
+        RCC_AHB1ENR |= (1U << 4);
+    else
+        return;
+
+    (void)RCC_AHB1ENR; /* Allow the peripheral clock enable to take effect. */
 }
 
 /**
@@ -37,9 +47,11 @@ void gpio_clock_enable(gpio_t *gpio)
  */
 void gpio_mode(gpio_t *gpio, uint8_t pin, gpio_mode_t mode)
 {
-    gpio->MODER &= ~(0x3 << (pin * 2));
+    if (!gpio_valid(gpio, pin) || (uint32_t)mode > GPIO_ANALOG)
+        return;
 
-    gpio->MODER |= (mode << (pin * 2));
+    gpio->MODER = (gpio->MODER & ~(3U << (pin * 2U))) |
+                  ((uint32_t)mode << (pin * 2U));
 }
 
 /**
@@ -51,9 +63,10 @@ void gpio_mode(gpio_t *gpio, uint8_t pin, gpio_mode_t mode)
  */
 void gpio_output_type(gpio_t *gpio, uint8_t pin, gpio_otype_t type)
 {
-    gpio->OTYPER &= ~(1 << pin);
+    if (!gpio_valid(gpio, pin) || (uint32_t)type > GPIO_OPEN_DRAIN)
+        return;
 
-    gpio->OTYPER |= (type << pin);
+    gpio->OTYPER = (gpio->OTYPER & ~(1U << pin)) | ((uint32_t)type << pin);
 }
 
 /**
@@ -65,9 +78,11 @@ void gpio_output_type(gpio_t *gpio, uint8_t pin, gpio_otype_t type)
  */
 void gpio_pull(gpio_t *gpio, uint8_t pin, gpio_pull_t pull)
 {
-    gpio->PUPDR &= ~(0x3 << (pin * 2));
+    if (!gpio_valid(gpio, pin) || (uint32_t)pull > GPIO_PULL_DOWN)
+        return;
 
-    gpio->PUPDR |= (pull << (pin * 2));
+    gpio->PUPDR = (gpio->PUPDR & ~(3U << (pin * 2U))) |
+                  ((uint32_t)pull << (pin * 2U));
 }
 
 /**
@@ -79,9 +94,11 @@ void gpio_pull(gpio_t *gpio, uint8_t pin, gpio_pull_t pull)
  */
 void gpio_speed(gpio_t *gpio, uint8_t pin, gpio_speed_t speed)
 {
-    gpio->OSPEEDR &= ~(0x3 << (pin * 2));
+    if (!gpio_valid(gpio, pin) || (uint32_t)speed > GPIO_HIGH_SPEED)
+        return;
 
-    gpio->OSPEEDR |= (speed << (pin * 2));
+    gpio->OSPEEDR = (gpio->OSPEEDR & ~(3U << (pin * 2U))) |
+                    ((uint32_t)speed << (pin * 2U));
 }
 
 /**
@@ -93,20 +110,12 @@ void gpio_speed(gpio_t *gpio, uint8_t pin, gpio_speed_t speed)
  */
 void gpio_af(gpio_t *gpio, uint8_t pin, uint8_t af)
 {
-    if (pin < 8)
-    {
-        gpio->AFRL &= ~(0xF << (pin * 4));
+    if (!gpio_valid(gpio, pin) || af > 15U)
+        return;
 
-        gpio->AFRL |= (af << (pin * 4));
-    }
-    else
-    {
-        pin -= 8;
-
-        gpio->AFRH &= ~(0xF << (pin * 4));
-
-        gpio->AFRH |= (af << (pin * 4));
-    }
+    volatile uint32_t *reg = pin < 8U ? &gpio->AFRL : &gpio->AFRH;
+    uint32_t shift = (pin % 8U) * 4U;
+    *reg = (*reg & ~(15U << shift)) | ((uint32_t)af << shift);
 }
 
 /**
@@ -118,11 +127,14 @@ void gpio_af(gpio_t *gpio, uint8_t pin, uint8_t af)
  */
 void gpio_write(gpio_t *gpio, uint8_t pin, uint8_t state)
 {
+    if (!gpio_valid(gpio, pin))
+        return;
+
     if (state)
-        gpio->BSRR = (1 << pin);
+        gpio->BSRR = (1U << pin);
 
     else
-        gpio->BSRR = (1 << (pin + 16));
+        gpio->BSRR = (1U << (pin + 16U));
 }
 
 /**
@@ -134,7 +146,11 @@ void gpio_write(gpio_t *gpio, uint8_t pin, uint8_t state)
 void gpio_toggle(gpio_t *gpio,
                  uint8_t pin)
 {
-    gpio->ODR ^= (1 << pin);
+    if (!gpio_valid(gpio, pin))
+        return;
+
+    /* Update only this output through BSRR; no read-modify-write of ODR. */
+    gpio_write(gpio, pin, (gpio->ODR & (1U << pin)) == 0U);
 }
 
 /**
@@ -146,5 +162,8 @@ void gpio_toggle(gpio_t *gpio,
 uint8_t gpio_read(gpio_t *gpio,
                   uint8_t pin)
 {
-    return (gpio->IDR >> pin) & 0x1;
+    if (!gpio_valid(gpio, pin))
+        return 0;
+
+    return (gpio->IDR >> pin) & 1U;
 }
