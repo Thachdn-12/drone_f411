@@ -12,6 +12,13 @@
 .extern PendSV_Handler
 .extern SysTick_Handler
 .extern TIM2_IRQHandler
+.extern EXTI0_IRQHandler
+.extern EXTI1_IRQHandler
+.extern EXTI2_IRQHandler
+.extern EXTI3_IRQHandler
+.extern EXTI4_IRQHandler
+.extern EXTI9_5_IRQHandler
+.extern EXTI15_10_IRQHandler
 
 g_pfnVectors:
     .word _estack
@@ -35,12 +42,28 @@ g_pfnVectors:
     .word PendSV_Handler /* PendSV */
     .word SysTick_Handler /* SysTick */
 
-    /* External IRQ 28 is TIM2. Keep the remaining vector slots in place. */
-    .rept 28
+    /* External IRQs: EXTI0..4=6..10, EXTI9_5=23, TIM2=28, EXTI15_10=40. */
+    .rept 6
+    .word Default_Handler
+    .endr
+    .word EXTI0_IRQHandler
+    .word EXTI1_IRQHandler
+    .word EXTI2_IRQHandler
+    .word EXTI3_IRQHandler
+    .word EXTI4_IRQHandler
+    .rept 12
+    .word Default_Handler
+    .endr
+    .word EXTI9_5_IRQHandler
+    .rept 4
     .word Default_Handler
     .endr
     .word TIM2_IRQHandler
-    .rept 53
+    .rept 11
+    .word Default_Handler
+    .endr
+    .word EXTI15_10_IRQHandler
+    .rept 41
     .word Default_Handler
     .endr
 

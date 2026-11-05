@@ -1,6 +1,10 @@
 .vscode/
 output/
 *.o
-tests/
+**/tests/*
+!tests/bmp280_driver_test.c
+!tests/spi_driver_test.c
+!tests/gpio_driver_test.c
+!tests/gpio_vector_test.py
 toolchains/
 tools/
