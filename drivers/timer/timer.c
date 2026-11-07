@@ -114,3 +114,25 @@ uint32_t timer_get_tick(void)
 {
     return g_timer2_tick;
 }
+
+int timer_periodic_start(timer_periodic_t *periodic, uint32_t period_ticks,
+                         uint32_t start_tick)
+{
+    if (periodic == 0 || period_ticks == 0U)
+        return -1;
+
+    periodic->last_tick = start_tick;
+    periodic->period_ticks = period_ticks;
+    return 0;
+}
+
+uint32_t timer_periodic_poll(timer_periodic_t *periodic, uint32_t now_tick)
+{
+    if (periodic == 0 || periodic->period_ticks == 0U)
+        return 0;
+
+    uint32_t elapsed = now_tick - periodic->last_tick;
+    uint32_t periods = elapsed / periodic->period_ticks;
+    periodic->last_tick += periods * periodic->period_ticks;
+    return periods;
+}

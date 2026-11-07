@@ -8,7 +8,7 @@
 static int gpio_valid(gpio_t *gpio, uint8_t pin)
 {
     return pin < 16U && (gpio == GPIOA || gpio == GPIOB || gpio == GPIOC ||
-                        gpio == GPIOD || gpio == GPIOE);
+                         gpio == GPIOD || gpio == GPIOE);
 }
 
 /**
