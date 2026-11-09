@@ -54,7 +54,10 @@
 #define TIM_CR1_CEN         (1U << 0)
 #define TIM_CR1_ARPE        (1U << 7)
 #define TIM_BDTR_MOE        (1U << 15)
+#define TIM_BDTR_IDLE       ((1U << 10) | (1U << 11))
 #define TIM_EGR_UG          (1U << 0)
+
+static bool initialized;
 
 /* =========================================================
  * PWM Init
@@ -62,6 +65,7 @@
 
 void pwm_init(void)
 {
+    initialized = false;
     RCC_AHB1ENR |= (1 << 0);   /* GPIOA */
     RCC_APB2ENR |= (1 << 0);   /* TIM1 */
     (void)RCC_APB2ENR;
@@ -105,9 +109,44 @@ void pwm_init(void)
     TIM1_CR1 = TIM_CR1_ARPE;
     TIM1_EGR = TIM_EGR_UG;
     TIM1_SR = 0;
-    TIM1_CCER = (1U << 0) | (1U << 4) | (1U << 8) | (1U << 12);
-    TIM1_BDTR = TIM_BDTR_MOE;
+    TIM1_CCER = 0;
+    TIM1_BDTR = TIM_BDTR_IDLE; /* Inactive low, main output gated. */
     TIM1_CR1 |= TIM_CR1_CEN;
+    initialized = true;
+}
+
+bool pwm_disable_outputs(void)
+{
+    if (!initialized) return false;
+    TIM1_BDTR &= ~TIM_BDTR_MOE;
+    TIM1_CCER = 0;
+    TIM1_CCR1 = TIM1_CCR2 = TIM1_CCR3 = TIM1_CCR4 = PWM_MIN_US;
+    TIM1_EGR = TIM_EGR_UG; /* Flush old preloads with all channels gated. */
+    TIM1_SR = 0;
+    return (TIM1_BDTR & TIM_BDTR_MOE) == 0 && TIM1_CCER == 0;
+}
+
+bool pwm_write_us(uint8_t channel, uint16_t pulse_us)
+{
+    if (!initialized || channel < PWM_CH1 || channel > PWM_CH4 ||
+        pulse_us < PWM_MIN_US || pulse_us > PWM_MAX_US) return false;
+    uint32_t index = (uint32_t)channel - 1U;
+    uint32_t enable = 1U << (4U * index);
+    volatile uint32_t *compare = (volatile uint32_t *)(TIM1_BASE + 0x34U + 4U * index);
+    if ((TIM1_CCER & enable) == 0)
+    {
+        /* Load a newly started channel without resetting other channels' period. */
+        volatile uint32_t *mode = index < 2U ? &TIM1_CCMR1 : &TIM1_CCMR2;
+        uint32_t preload = 1U << (3U + 8U * (index % 2U));
+        *mode &= ~preload;
+        *compare = pulse_us;
+        *mode |= preload;
+    }
+    else *compare = pulse_us;
+    TIM1_CCER |= enable;
+    TIM1_BDTR |= TIM_BDTR_MOE;
+    return *compare == pulse_us && (TIM1_CCER & enable) != 0 &&
+           (TIM1_BDTR & TIM_BDTR_MOE) != 0;
 }
 
 /* =========================================================

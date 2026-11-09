@@ -2,6 +2,7 @@
 #define PWM_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /* =========================================================
  * PWM Channels
@@ -16,11 +17,17 @@
  * APIs
  * ========================================================= */
 
-/* TIM1 CH1..CH4 on PA8..PA11, 50 Hz, initially 1000 us per channel. */
+/* TIM1 CH1..CH4 on PA8..PA11, 50 Hz. Outputs stay disabled after init. */
 void pwm_init(void);
 
-/* Clamp to 1000..2000 us; apply on the next PWM update. Invalid channels ignored. */
+/* Clamp to 1000..2000 us; preload only, never enables an output. */
 void pwm_set_us(uint8_t channel,
                 uint16_t pulse_us);
+
+/* Foreground-only: validate, write compare register and enable just this channel.
+ * Subsequent changes take effect at the next 50 Hz update. A true return means
+ * driver/register acceptance, not a measured waveform or ESC acknowledgement. */
+bool pwm_write_us(uint8_t channel, uint16_t pulse_us);
+bool pwm_disable_outputs(void);
 
 #endif
