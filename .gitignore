@@ -1,3 +1,23 @@
+<<<<<<< Updated upstream
 .vscode
 output
 *.o
+=======
+.vscode/
+output/
+*.o
+**/tests/*
+!tests/bmp280_driver_test.c
+!tests/spi_driver_test.c
+!tests/gpio_driver_test.c
+!tests/gpio_vector_test.py
+!tests/timer_scheduler_test.c
+!tests/uart_driver_test.c
+!tests/i2c_driver_test.c
+!tests/i2c_test_backend.h
+!tests/pwm_driver_test.c
+!tests/gcs_integration_test.c
+!tests/gcs_wire_test.py
+toolchains/
+tools/
+>>>>>>> Stashed changes

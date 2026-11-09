@@ -11,6 +11,19 @@
 .extern SVC_Handler
 .extern PendSV_Handler
 .extern SysTick_Handler
+<<<<<<< Updated upstream
+=======
+.extern TIM2_IRQHandler
+.extern EXTI0_IRQHandler
+.extern EXTI1_IRQHandler
+.extern EXTI2_IRQHandler
+.extern EXTI3_IRQHandler
+.extern EXTI4_IRQHandler
+.extern EXTI9_5_IRQHandler
+.extern EXTI15_10_IRQHandler
+.extern USART2_IRQHandler
+.extern DMA1_Stream6_IRQHandler
+>>>>>>> Stashed changes
 
 g_pfnVectors:
     .word _estack
@@ -34,8 +47,39 @@ g_pfnVectors:
     .word PendSV_Handler /* PendSV */
     .word SysTick_Handler /* SysTick */
 
+<<<<<<< Updated upstream
     /* IRQs (rút gọn, sau này add thêm) */
     .rept 82
+=======
+    /* External IRQs: EXTI0..4=6..10, EXTI9_5=23, TIM2=28, EXTI15_10=40. */
+    .rept 6
+    .word Default_Handler
+    .endr
+    .word EXTI0_IRQHandler
+    .word EXTI1_IRQHandler
+    .word EXTI2_IRQHandler
+    .word EXTI3_IRQHandler
+    .word EXTI4_IRQHandler
+    .rept 6
+    .word Default_Handler
+    .endr
+    .word DMA1_Stream6_IRQHandler /* IRQ17 */
+    .rept 5
+    .word Default_Handler
+    .endr
+    .word EXTI9_5_IRQHandler
+    .rept 4
+    .word Default_Handler
+    .endr
+    .word TIM2_IRQHandler
+    .rept 9
+    .word Default_Handler
+    .endr
+    .word USART2_IRQHandler /* IRQ38 */
+    .word Default_Handler
+    .word EXTI15_10_IRQHandler
+    .rept 41
+>>>>>>> Stashed changes
     .word Default_Handler
     .endr
 
