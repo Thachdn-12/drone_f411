@@ -1,11 +1,7 @@
 #include "uart.h"
-#include "gpio.h"
-#include "systick.h"
-#include "adc.h"
-#include "pwm.h"
-#include "mpu6050.h"
-#include "task_imu.h"
-#include "task_baro.h"
+#include "task_list.h"
+#include "drone_config.h"
+#include "task_gcs.h"
 
 /* =========================================================
  * App Run
@@ -14,18 +10,15 @@
 void drone_app_run(void)
 {
     uart_printf("Starting Drone App\r\n");
+    task_list_init();
+#if DRONE_GCS_ENABLED
+    task_gcs_init();
+#endif
     while (1)
-    { 
-        task_imu_run();
-        task_baro_run();
-        const imu_state_t *imu = task_imu_get();
-
-        uart_printf(
-            "R=%d P=%d\r\n",
-            (int)imu->roll,
-            (int)imu->pitch
-        );
-
-        delay_ms(100);
+    {
+#if DRONE_GCS_ENABLED
+        task_gcs_run();
+#endif
+        task_list_run();
     }
 }

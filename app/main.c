@@ -10,6 +10,7 @@
 #include "task_imu.h"
 #include "task_baro.h"
 #include "timer.h"
+#include "drone_config.h"
 
 /* =========================================================
  * App Entry
@@ -27,7 +28,10 @@ int main(void)
      * Core Drivers
      * ===================================================== */
     
-    uart_init();
+    if (uart_init() != UART_OK)
+    {
+        while (1) { }
+    }
     /* Print before interrupts, delays or sensor access can block boot. */
     uart_printf("\r\n====================================\r\n");
     uart_printf(" _____ ___  ____  __   __\r\n");
@@ -51,8 +55,13 @@ int main(void)
     i2c_init();
     pwm_init();
     adc_init();
-    timer_init(1000);
+    if (timer_init(DRONE_TIMER_HZ) != 0)
+    {
+        uart_printf("TIM2: initialization failed\r\n");
+        while (1) { }
+    }
     spi1_init();
+    task_baro_set_logging(!DRONE_GCS_ENABLED);
     uart_printf("BMP280: initializing SPI1 PA4/PA5/PA6/PA7...\r\n");
     bmp280_status_t baro_status = task_baro_init();
     if (baro_status == BMP280_OK)
@@ -60,24 +69,13 @@ int main(void)
     else
         uart_printf("BMP280: unavailable (%d), check SPI wiring\r\n", (int)baro_status);
     uart_printf("MPU6050: initializing on PB6/PB7...\r\n");
+    task_imu_init();
     if (mpu6050_init() != 0)
     {
-        /* Keep the console alive even when the sensor is absent. */
-        while (1)
-        {
-            uart_printf("UART OK; MPU6050 unavailable (check PB6/PB7)\r\n");
-            task_baro_run();
-            delay_ms(1000);
-        }
+        task_imu_set_available(false);
+        uart_printf("MPU6050: unavailable; GCS diagnostics remain active\r\n");
     }
-    task_imu_init();
-    uart_printf("MPU6050: ready\r\n");
-
-    uart_printf("[PWM] Check pwm value \n");
-    pwm_set_us(PWM_CH1, 1000);
-    pwm_set_us(PWM_CH2, 1250);
-    pwm_set_us(PWM_CH3, 1500);
-    pwm_set_us(PWM_CH4, 2000);
+    else uart_printf("MPU6050: ready\r\n");
     /* =====================================================
      * Start Application
      * ===================================================== */

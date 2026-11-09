@@ -1,14 +1,12 @@
 #include "task_imu.h"
 
 #include "mpu6050.h"
-#include "systick.h"
 #include "arm_math.h"
+#include "systick.h"
 
 /* =========================================================
  * Configuration
  * ========================================================= */
-
-#define IMU_UPDATE_PERIOD_MS    10U
 
 #define ACCEL_SCALE             16384.0f
 #define GYRO_SCALE              131.0f
@@ -20,10 +18,9 @@
  * ========================================================= */
 
 static imu_state_t g_imu;
+static bool available, healthy;
+static uint32_t last_sample_ms;
 
-static uint32_t g_last_update_ms;
-
-static uint32_t test_global = 0;
 /* =========================================================
  * Internal Helpers
  * ========================================================= */
@@ -36,8 +33,9 @@ static void imu_compute_attitude(void);
 
 void task_imu_init(void)
 {
-    g_last_update_ms = 0;
-
+    available = true;
+    healthy = false;
+    last_sample_ms = 0;
     g_imu.ax = 0.0f;
     g_imu.ay = 0.0f;
     g_imu.az = 0.0f;
@@ -52,21 +50,16 @@ void task_imu_init(void)
 
 /* =========================================================
  * Run
- * Call periodically from main loop
+ * Called once per release by the foreground TIM2 dispatcher
  * ========================================================= */
 
 void task_imu_run(void)
 {
+    if (!available) return;
     mpu6050_raw_t raw;
-    uint32_t now = systick_get_tick();
-    if ((now - g_last_update_ms) < IMU_UPDATE_PERIOD_MS)
-    {
-        return;
-    }
-
-    g_last_update_ms = now;
     if (mpu6050_read_raw(&raw) != 0)
     {
+        healthy = false;
         return;
     }
 
@@ -90,7 +83,13 @@ void task_imu_run(void)
      * Attitude
      * ------------------------------------- */
     imu_compute_attitude();
+    last_sample_ms = systick_get_tick();
+    healthy = true;
 }
+
+void task_imu_set_available(bool value) { available = value; healthy = false; }
+bool task_imu_healthy(void) { return healthy; }
+uint32_t task_imu_last_sample_ms(void) { return last_sample_ms; }
 
 /* =========================================================
  * Compute Roll/Pitch from Accelerometer
