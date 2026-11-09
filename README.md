@@ -77,8 +77,6 @@ Hardware
 - Hardware selected
 - Architecture planning completed
 - Kernel development started
-<<<<<<< Updated upstream
-=======
 
 ## Build
 
@@ -493,4 +491,3 @@ Run `make test-scheduler test-timer test-bmp280` for host dispatch/driver tests
 and the linked TIM2 vector check. The scheduler tests exercise real TIM2 IRQ
 tick increments with fake sensor/UART work, including release boundaries,
 simultaneous tasks, skipped periods, delayed work and uint32_t rollover.
->>>>>>> Stashed changes
