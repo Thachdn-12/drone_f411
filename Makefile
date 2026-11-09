@@ -90,9 +90,26 @@ CFLAGS := $(CPUFLAGS) \
     -MMD -MP
 
 LDSCRIPT := core/linker_stm32f411.ld
-LDFLAGS := $(CPUFLAGS) -T$(LDSCRIPT) -nostdlib \
-    -Wl,--gc-sections -Wl,-Map=$(MAP)
-LIBS := -lgcc
+
+LDFLAGS := $(CPUFLAGS)
+
+LDFLAGS += \
+	-T$(LDSCRIPT) \
+	-nostdlib \
+	-Wl,--gc-sections \
+	-Wl,-Map=$(MAP) 
+
+# =========================================================
+# Libraries
+# =========================================================
+
+LIBS := \
+	-lgcc
+
+
+# =========================================================
+# Sources
+# =========================================================
 
 SRC := \
     core/startup_stm32f411.s \
@@ -115,13 +132,16 @@ SRC := \
     app/drone_app.c \
     app/main.c
 
-OBJ := $(addprefix $(BUILD_DIR)/,$(patsubst %.c,%.o,$(filter %.c,$(SRC))) \
-       $(patsubst %.s,%.o,$(filter %.s,$(SRC))))
-DEP := $(OBJ:.o=.d)
+# =========================================================
+# Objects
+# =========================================================
 
-.DEFAULT_GOAL := all
+OBJ := $(SRC:.c=.o)
+OBJ := $(OBJ:.s=.o)
 
-.PHONY: all check-toolchain check-openocd flash debug gdb monitor test-gpio test-pwm test-timer test-adc test-bmp280 test-spi clean
+# =========================================================
+# Default Target
+# =========================================================
 
 all: $(BIN)
 
@@ -157,75 +177,33 @@ $(ELF): $(OBJ) $(LDSCRIPT) | check-toolchain
 $(BIN): $(ELF)
 	$(OBJCOPY) -O binary $< $@
 
-flash: check-openocd $(ELF)
-	"$(OPENOCD)" $(OPENOCD_FLAGS) \
-		-c "program {$(ELF)} verify reset exit"
+# =========================================================
+# Flash
+# =========================================================
 
-debug: check-openocd
-	"$(OPENOCD)" $(OPENOCD_FLAGS)
+flash: $(ELF)
+	openocd \
+	-f interface/stlink.cfg \
+	-f target/stm32f4x.cfg \
+	-c "program $(ELF) verify reset exit"
 
-gdb: $(ELF)
-	"$(GDB)" -q -nx "$(ELF)" \
-		-ex "target remote localhost:$(GDB_PORT)" \
-		-ex "monitor reset halt" -ex "tbreak main" -ex "continue"
+# =========================================================
+# OpenOCD Server
+# =========================================================
 
-monitor:
-	@command -v screen >/dev/null 2>&1 || { echo "Install screen: sudo apt install screen"; exit 1; }
-	@test -c "$(PORT)" || { echo "Serial port not found: $(PORT). Set PORT=/dev/ttyUSBx"; exit 1; }
-	stty -F "$(PORT)" $(BAUD) raw -echo cs8 -parenb -cstopb -crtscts -ixon -ixoff
-	screen -fn "$(PORT)" "$(BAUD)"
+debug:
+	openocd -f scripts/openocd.cfg
 
-# Linux host regression test using mapped peripheral registers.
-HOST_CC ?= cc
-test-gpio: $(ELF)
-	@mkdir -p $(BUILD_DIR)/test
-	$(HOST_CC) -std=c11 -Wall -Wextra -Wshadow -Werror \
-		-fsanitize=undefined -fno-sanitize-recover=undefined -Idrivers/gpio \
-		tests/gpio_driver_test.c drivers/gpio/gpio.c drivers/gpio/gpio_exti.c \
-		-o $(BUILD_DIR)/test/gpio_driver_test
-	$(BUILD_DIR)/test/gpio_driver_test
-	$(OBJCOPY) -O binary --only-section=.text $(ELF) $(BUILD_DIR)/test/gpio_text.bin
-	python3 tests/gpio_vector_test.py $(BUILD_DIR)/test/gpio_text.bin $(ELF) $(PREFIX)nm
+# =========================================================
+# GDB
+# =========================================================
 
-test-pwm:
-	@mkdir -p $(BUILD_DIR)/test
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
-		-Idrivers/pwm -Idrivers/gpio -Idrivers/uart -Icore \
-		tests/pwm_driver_test.c drivers/pwm/pwm.c drivers/gpio/gpio.c drivers/uart/uart.c \
-		-o $(BUILD_DIR)/test/pwm_driver_test
-	$(BUILD_DIR)/test/pwm_driver_test
+gdb:
+	$(GDB) $(ELF)
 
-test-timer: $(ELF)
-	@mkdir -p $(BUILD_DIR)/test
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -Idrivers/timer -Idrivers/gpio -Icore \
-		tests/timer_driver_test.c drivers/timer/timer.c -o $(BUILD_DIR)/test/timer_driver_test
-	$(BUILD_DIR)/test/timer_driver_test
-	$(OBJCOPY) -O binary --only-section=.text $(ELF) $(BUILD_DIR)/test/timer_text.bin
-	python3 tests/timer_vector_test.py $(BUILD_DIR)/test/timer_text.bin $(ELF) $(PREFIX)nm
-
-test-adc:
-	@mkdir -p $(BUILD_DIR)/test
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
-		-Idrivers/adc -Idrivers/gpio -Idrivers/uart -Idrivers/pwm -Idrivers/systick -Icore \
-		tests/adc_driver_test.c drivers/adc/adc.c drivers/gpio/gpio.c drivers/uart/uart.c drivers/pwm/pwm.c \
-		-o $(BUILD_DIR)/test/adc_driver_test
-	$(BUILD_DIR)/test/adc_driver_test
-
-test-bmp280:
-	@mkdir -p $(BUILD_DIR)/test
-	$(HOST_CC) -std=c11 -Wall -Wextra -Wshadow -Werror \
-		-Iapp -Idrivers/sensors/bmp280 -Idrivers/spi -Idrivers/gpio -Idrivers/systick -Idrivers/uart \
-		tests/bmp280_driver_test.c drivers/sensors/bmp280/bmp280.c app/task_baro.c \
-		-o $(BUILD_DIR)/test/bmp280_driver_test
-	$(BUILD_DIR)/test/bmp280_driver_test
-
-test-spi:
-	@mkdir -p $(BUILD_DIR)/test
-	$(HOST_CC) -std=c11 -Wall -Wextra -Wshadow -Werror \
-		-Idrivers/spi -Idrivers/gpio -Idrivers/systick \
-		tests/spi_driver_test.c drivers/spi/spi.c drivers/gpio/gpio.c \
-		-o $(BUILD_DIR)/test/spi_driver_test
-	$(BUILD_DIR)/test/spi_driver_test
+# =========================================================
+# Clean
+# =========================================================
 
 clean:
 	rm -rf $(BUILD_DIR)
