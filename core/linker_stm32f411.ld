@@ -6,6 +6,13 @@ MEMORY
     RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 128K
 }
 
+/* Build-time memory report: .data is the last Flash load section and .bss
+ * is the last statically allocated RAM section in this layout. */
+__flash_total = LENGTH(FLASH);
+__flash_used = LOADADDR(.data) + SIZEOF(.data) - ORIGIN(FLASH);
+__ram_total = LENGTH(RAM);
+__ram_used = ADDR(.bss) + SIZEOF(.bss) - ORIGIN(RAM);
+
 _estack = ORIGIN(RAM) + LENGTH(RAM);
 
 SECTIONS

@@ -16,6 +16,7 @@ CC            := $(PREFIX)gcc
 LD            := $(PREFIX)gcc
 OBJCOPY       := $(PREFIX)objcopy
 SIZE          := $(PREFIX)size
+NM            := $(PREFIX)nm
 GDB           := $(PREFIX)gdb
 
 # Prefer the xPack OpenOCD bundled in tools/, otherwise search PATH.
@@ -128,7 +129,7 @@ DEP := $(OBJ:.o=.d)
 
 .DEFAULT_GOAL := all
 
-.PHONY: all check-toolchain check-openocd flash debug gdb monitor test-i2c test-uart test-gpio test-pwm test-timer test-scheduler test-adc test-bmp280 test-spi test-gcs clean
+.PHONY: all check-toolchain check-openocd memory flash debug gdb monitor test-i2c test-uart test-gpio test-pwm test-timer test-scheduler test-adc test-bmp280 test-spi test-gcs clean
 
 all: $(BIN)
 
@@ -164,7 +165,25 @@ $(ELF): $(OBJ) $(LDSCRIPT) | check-toolchain
 $(BIN): $(ELF)
 	$(OBJCOPY) -O binary $< $@
 
-flash: check-openocd $(ELF)
+memory: $(ELF)
+	@$(NM) --defined-only --radix=d "$(ELF)" | awk '\
+	    $$3 == "__flash_used"  { flash_used = $$1; found++ } \
+	    $$3 == "__flash_total" { flash_total = $$1; found++ } \
+	    $$3 == "__ram_used"    { ram_used = $$1; found++ } \
+	    $$3 == "__ram_total"   { ram_total = $$1; found++ } \
+	    END { \
+	        if (found != 4 || flash_total <= 0 || ram_total <= 0) { \
+	            print "ERROR: Cannot read memory usage from ELF linker symbols."; \
+	            exit 1; \
+	        } \
+	        printf "\nMemory usage (bytes):\n"; \
+	        printf "%-12s %10s %10s %10s %8s\n", "Region", "Used", "Total", "Free", "Used %"; \
+	        printf "%-12s %10d %10d %10d %7.2f%%\n", "ROM (Flash)", flash_used, flash_total, flash_total - flash_used, 100 * flash_used / flash_total; \
+	        printf "%-12s %10d %10d %10d %7.2f%%\n", "RAM", ram_used, ram_total, ram_total - ram_used, 100 * ram_used / ram_total; \
+	        print "RAM: static allocation; runtime stack/heap usage is not measured.\n"; \
+	    }'
+
+flash: check-openocd memory
 	"$(OPENOCD)" $(OPENOCD_FLAGS) \
 		-c "program {$(ELF)} verify reset exit"
 

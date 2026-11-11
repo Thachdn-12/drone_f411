@@ -113,7 +113,16 @@ probe. SWD uses a software reset, so NRST is optional.
 ```sh
 make flash                  # Build, program, verify, reset and run
 make flash SWD_SPEED=400    # Lower SWD speed if the connection is unstable
+make memory                 # Show memory usage without flashing
 ```
+
+Every `make flash` prints ROM (Flash) and RAM usage before programming, even
+when the firmware is already up to date. The table shows used, total and free
+bytes, plus the percentage used. Capacities come from the linker script
+(512 KiB Flash and 128 KiB RAM). Flash usage includes the initial values for
+`.data`; RAM usage includes `.data`, `.bss` and alignment padding. Free RAM is
+the space left after static allocation, before runtime stack/heap usage.
+Any heap buffers already reserved in `.bss` are included in used RAM.
 
 For debugging, start the OpenOCD server in one terminal, then GDB in another:
 

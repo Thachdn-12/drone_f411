@@ -7,7 +7,7 @@
  * Core Clock
  * ========================================================= */
 
-/* Reset HSI clock; no PLL or bus prescalers are configured. */
+/* Board-trimmed HSI clock; no PLL or bus prescalers are configured. */
 #define SYSTEM_CORE_CLOCK_HZ 16000000UL
 
 /* =========================================================
