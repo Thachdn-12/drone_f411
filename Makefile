@@ -75,25 +75,6 @@ CFLAGS += \
 # =========================================================
 
 INCLUDES := \
-<<<<<<< Updated upstream
-	-Icore \
-	-Iapp \
-	-Iconfig \
-	-Ikernel/FreeRTOS/include \
-	-Ikernel/FreeRTOS/portable/GCC/ARM_CM4F \
-	-Idrivers/gpio \
-	-Idrivers/systick \
-	-Idrivers/i2c \
-	-Idrivers/uart \
-	-Idrivers/sensors/mpu6050 \
-	-Idrivers/pwm \
-	-Idrivers/adc \
-	-Idrivers/timer \
-	-Ilibs/CMSIS/Core/Include \
-	-Ilibs/CMSIS/DSP/Include/dsp \
-	-Ilibs/CMSIS/DSP/PrivateInclude \
-	-Ilibs/CMSIS/DSP/Include
-=======
     -Icore \
     -Iapp \
     -Iapp/gcs \
@@ -111,7 +92,6 @@ INCLUDES := \
     -Idrivers/adc \
     -Idrivers/timer \
     $(CMSIS_INCLUDES)
->>>>>>> Stashed changes
 
 
 CFLAGS += $(INCLUDES)
@@ -121,10 +101,6 @@ CFLAGS += $(INCLUDES)
 # =========================================================
 
 LDSCRIPT := core/linker_stm32f411.ld
-<<<<<<< Updated upstream
-
-LDFLAGS := $(CPUFLAGS)
-=======
 LDFLAGS := $(CPUFLAGS) -T$(LDSCRIPT) -nostdlib \
     -Wl,--gc-sections -Wl,-Map=$(MAP)
 # Allocation-free string/memory routines come from libc; altitude uses libm.
@@ -155,7 +131,6 @@ SRC := \
     $(FREERTOS_SRC) \
     app/drone_app.c \
     app/main.c
->>>>>>> Stashed changes
 
 LDFLAGS += \
 	-T$(LDSCRIPT) \
@@ -167,46 +142,7 @@ LDFLAGS += \
 # Libraries
 # =========================================================
 
-<<<<<<< Updated upstream
-LIBS := \
-	-lgcc
-
-
-# =========================================================
-# Sources
-# =========================================================
-
-SRC += \
-	core/startup_stm32f411.s \
-	core/system.c \
-	drivers/systick/systick.c \
-	drivers/gpio/gpio.c \
-	drivers/i2c/i2c.c \
-	drivers/uart/uart.c \
-	drivers/pwm/pwm.c \
-	drivers/adc/adc.c \
-	drivers/timer/timer.c \
-	drivers/sensors/mpu6050/mpu6050.c \
-	app/task_imu.c \
-	libs/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
-	libs/CMSIS/DSP/Source/FastMathFunctions/arm_sqrt_q31.c \
-	$(FREERTOS_SRC) \
-	app/drone_app.c \
-	app/main.c
-
-# =========================================================
-# Objects
-# =========================================================
-
-OBJ := $(SRC:.c=.o)
-OBJ := $(OBJ:.s=.o)
-
-# =========================================================
-# Default Target
-# =========================================================
-=======
 .PHONY: all check-toolchain check-openocd flash debug gdb monitor test-i2c test-uart test-gpio test-pwm test-timer test-scheduler test-adc test-bmp280 test-spi test-gcs clean
->>>>>>> Stashed changes
 
 all: $(BIN)
 
@@ -259,18 +195,6 @@ flash: $(ELF)
 debug:
 	openocd -f scripts/openocd.cfg
 
-<<<<<<< Updated upstream
-# =========================================================
-# GDB
-# =========================================================
-
-gdb:
-	$(GDB) $(ELF)
-
-# =========================================================
-# Clean
-# =========================================================
-=======
 # Linux host regression test using mapped peripheral registers.
 HOST_CC ?= cc
 test-gcs:
@@ -366,7 +290,6 @@ test-spi:
 		tests/spi_driver_test.c drivers/spi/spi.c drivers/gpio/gpio.c \
 		-o $(BUILD_DIR)/test/spi_driver_test
 	$(BUILD_DIR)/test/spi_driver_test
->>>>>>> Stashed changes
 
 clean:
 	rm -rf $(BUILD_DIR)
